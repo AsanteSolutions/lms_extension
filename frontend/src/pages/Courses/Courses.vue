@@ -179,9 +179,7 @@ const courses = createListResource({
 	pageLength: pageLength.value,
 	start: start.value,
 	transform(data) {
-	console.log(user.data)
 		if(user.data?.is_instructor && (!user.data?.is_system_manager && !user.data?.is_moderator && !user.data?.is_evaluator)) {
-		 console.log("instructor")
 			return data.filter((element) => {
 				return element.instructors.some((instructor) => instructor.name === user.data?.name)
 			})
