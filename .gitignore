@@ -1,55 +1,17 @@
-# Byte-compiled / optimized / DLL files
+.DS_Store
+*.pyc
+*.egg-info
+*.swp
+tags
+lms_extension/docs/current
+lms_extension/public/dist
 __pycache__/
 *.py[cod]
 *$py.class
-*.pyc
-*.py~
-
-# Distribution / packaging
-.Python
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-tags
-MANIFEST
-
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# Dependency directories
-node_modules/
-jspm_packages/
-
-# IDEs and editors
-.vscode/
-.vs/
-.idea/
-.kdev4/
-*.kdev4
-*.DS_Store
-*.swp
-*.comp.js
-.wnf-lang-status
-*debug.log
-
-# Helix Editor
-.helix/
-
-# Aider AI Chat
-.aider*
+node_modules
+package-lock.json
+lms_extension/public/frontend
+lms_extension/www/lms.html
+lms_extension/www/_lms.html
+frappe-ui
+frappe-semgrep-rules
