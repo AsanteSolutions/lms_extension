@@ -27,6 +27,12 @@
 						:label="__('Submission Type')"
 						:required="true"
 					/>
+					<FormControl
+						v-model="assignment.custom_due_date"
+						type="datetime-local"
+						:label="__('Due Date')"
+						:required="true"
+					/>
 					<Link
 						v-model="assignment.course"
 						:label="__('Course')"
@@ -83,6 +89,7 @@ interface Assignment {
 	type: string
 	question: string
 	course?: string
+	custom_due_date: string
 }
 
 interface Assignments {
@@ -98,6 +105,7 @@ const assignment = reactive({
 	type: '',
 	question: '',
 	course: '',
+	custom_due_date: '',
 })
 
 const props = defineProps({
@@ -117,6 +125,7 @@ watch(
 					assignment.type = row.type
 					assignment.question = row.question
 					assignment.course = row.course || ''
+					assignment.custom_due_date = row.custom_due_date
 				}
 			})
 		}
@@ -129,6 +138,7 @@ watch(show, (newVal) => {
 		assignment.title = ''
 		assignment.type = ''
 		assignment.question = ''
+		assignment.custom_due_date = ''
 	}
 })
 

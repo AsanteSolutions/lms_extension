@@ -145,7 +145,7 @@ const assignmentFilter = computed(() => {
 
 const assignments = createListResource({
 	doctype: 'LMS Assignment',
-	fields: ['name', 'title', 'type', 'creation', 'question', 'course'],
+	fields: ['name', 'title', 'type', 'creation', 'question', 'course', 'custom_due_date'],
 	orderBy: 'modified desc',
 	cache: ['assignments'],
 	transform(data) {
