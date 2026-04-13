@@ -1,7 +1,7 @@
 <template>
 	<div
 		v-if="course.title"
-		class="flex flex-col h-full rounded-md overflow-auto text-ink-gray-9"
+		class="flex flex-col h-full rounded-md overflow-auto text-ink-gray-9 bg-surface-cards"
 		style="min-height: 350px"
 	>
 		<div
@@ -10,7 +10,7 @@
 				course.image
 					? { backgroundImage: `url('${encodeURI(course.image)}')` }
 					: {
-							backgroundImage: getGradientColor(),
+							backgroundImage: gradientColor,
 							backgroundBlendMode: 'screen',
 					  }
 			"
@@ -137,6 +137,8 @@ import { Award, BookOpen, GraduationCap, Star, Users } from 'lucide-vue-next'
 import { sessionStore } from '@/stores/session'
 import { Tooltip } from 'frappe-ui'
 import { formatAmount } from '@/utils'
+import { theme } from '@/utils/theme'
+import { computed, watch } from 'vue'
 import CourseInstructors from '@/components/CourseInstructors.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import ProgressBar from '@/components/ProgressBar.vue'
@@ -151,12 +153,12 @@ const props = defineProps({
 	},
 })
 
-const getGradientColor = () => {
-	let theme = localStorage.getItem('theme') == 'dark' ? 'darkMode' : 'lightMode'
+const gradientColor = computed(() => {
+	let themeMode = theme.value === 'dark' ? 'darkMode' : 'lightMode'
 	let color = props.course.card_gradient?.toLowerCase() || 'blue'
-	let colorMap = colors[theme][color]
+	let colorMap = colors[themeMode][color]
 	return `linear-gradient(to top right, black, ${colorMap[400]})`
-}
+})
 </script>
 <style>
 .course-card-pills {

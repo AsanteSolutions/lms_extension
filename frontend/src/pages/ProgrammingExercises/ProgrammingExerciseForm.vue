@@ -132,6 +132,7 @@ import ChildTable from '@/components/Controls/ChildTable.vue'
 
 const show = defineModel()
 const exercises = defineModel<ProgrammingExercises>('exercises')
+const totalExercises = defineModel<number>('totalExercises')
 const isDirty = ref(false)
 const originalTestCaseCount = ref(0)
 
@@ -150,7 +151,6 @@ const languageOptions = [
 const props = withDefaults(
 	defineProps<{
 		exerciseID: string
-		getExerciseCount: () => Promise<number>
 	}>(),
 	{
 		exerciseID: 'new',
@@ -257,7 +257,7 @@ const createNewExercise = (close: () => void) => {
 				close()
 				isDirty.value = false
 				exercises.value?.reload()
-				props.getExerciseCount()
+				totalExercises.value.reload()
 				toast.success(__('Programming Exercise created successfully'))
 			},
 			onError(err: any) {

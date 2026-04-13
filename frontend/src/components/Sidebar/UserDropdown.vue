@@ -68,6 +68,7 @@ import { sessionStore } from '@/stores/session'
 import { call, Dropdown, toast } from 'frappe-ui'
 import { useRouter } from 'vue-router'
 import { convertToTitleCase } from '@/utils'
+import { applyTheme, toggleTheme, theme } from '@/utils/theme'
 import { usersStore } from '@/stores/user'
 import { useSettings } from '@/stores/settings'
 import { markRaw, watch, ref, onMounted, computed } from 'vue'
@@ -94,7 +95,6 @@ let { userResource } = usersStore()
 const settingsStore = useSettings()
 let { isLoggedIn } = sessionStore()
 const showSettingsModal = ref(false)
-const theme = ref('light')
 const frappeCloudBaseEndpoint = 'https://frappecloud.com'
 const $dialog = createDialog
 
@@ -106,9 +106,8 @@ const props = defineProps({
 })
 
 onMounted(() => {
-	theme.value = localStorage.getItem('theme') || 'light'
 	if (['light', 'dark'].includes(theme.value)) {
-		document.documentElement.setAttribute('data-theme', theme.value)
+		applyTheme(theme.value)
 	}
 })
 
@@ -118,13 +117,6 @@ watch(
 		showSettingsModal.value = value
 	}
 )
-
-const toggleTheme = () => {
-	const currentTheme = document.documentElement.getAttribute('data-theme')
-	theme.value = currentTheme === 'dark' ? 'light' : 'dark'
-	document.documentElement.setAttribute('data-theme', theme.value)
-	localStorage.setItem('theme', theme.value)
-}
 
 const userDropdownOptions = computed(() => {
 	return [

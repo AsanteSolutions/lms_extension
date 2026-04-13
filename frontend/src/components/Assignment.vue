@@ -17,7 +17,7 @@
 				</div>
 			</div>
 			<div class="text-ink-gray-9 font-semibold mb-5">
-				{{ __('Assignment Question') }}
+				{{ __('Assignment') }}: {{ assignment.data.title }}
 			</div>
 			<div
 				v-html="assignment.data.question"
@@ -304,7 +304,7 @@ const submitAssignment = () => {
 	}
 }
 
-const addNewSubmission = () => {
+const prepareSubmissionDoc = () => {
 	let doc = {
 		doctype: 'LMS Assignment Submission',
 		assignment: props.assignmentID,
@@ -315,24 +315,31 @@ const addNewSubmission = () => {
 	} else {
 		doc.assignment_attachment = attachment.value
 	}
+	return doc
+}
+
+const addNewSubmission = () => {
+	let doc = prepareSubmissionDoc()
+	if (!doc.assignment_attachment && !doc.answer) {
+		toast.error(
+			__('Please provide an answer or upload a file before submitting.')
+		)
+		return
+	}
 	call('frappe.client.insert', {
 		doc: doc,
 	})
 		.then((data) => {
 			toast.success(__('Assignment submitted successfully'))
-			if (router.currentRoute.value.name == 'AssignmentSubmission') {
-				router.push({
-					name: 'AssignmentSubmission',
-					params: {
-						assignmentID: props.assignmentID,
-						submissionName: data.name,
-					},
-					query: { fromLesson: router.currentRoute.value.query.fromLesson },
-				})
-			} else {
-				markLessonProgress()
-				router.go()
-			}
+			router.push({
+				name: 'AssignmentSubmission',
+				params: {
+					assignmentID: props.assignmentID,
+					submissionName: data.name,
+				},
+				query: { fromLesson: router.currentRoute.value.query.fromLesson },
+			})
+			markLessonProgress()
 			isDirty.value = false
 			submissionResource.name = data.name
 			submissionResource.reload()
@@ -376,15 +383,17 @@ const saveSubmission = (file) => {
 }
 
 const markLessonProgress = () => {
-	if (router.currentRoute.value.name == 'Lesson') {
-		let courseName = router.currentRoute.value.params.courseName
-		let chapterNumber = router.currentRoute.value.params.chapterNumber
-		let lessonNumber = router.currentRoute.value.params.lessonNumber
+	let pathname = window.location.pathname.split('/')
+	if (!pathname.includes('courses'))
+		pathname = window.parent.location.pathname.split('/')
+	if (pathname[2] != 'courses') return
+	let lessonIndex = pathname.pop().split('-')
 
+	if (lessonIndex.length == 2) {
 		call('lms.lms.api.mark_lesson_progress', {
-			course: courseName,
-			chapter_number: chapterNumber,
-			lesson_number: lessonNumber,
+			course: pathname[3],
+			chapter_number: lessonIndex[0],
+			lesson_number: lessonIndex[1],
 		})
 	}
 }
@@ -456,6 +465,6 @@ const statusTheme = computed(() => {
 })
 
 const showUploader = () => {
-	return ['PDF', 'Image', 'Document'].includes(assignment.data?.type) 
+	return ['PDF', 'Image', 'Document'].includes(assignment.data?.type)
 }
 </script>

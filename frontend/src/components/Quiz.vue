@@ -69,7 +69,7 @@
 			</ol>
 		</div>
 
-		<div v-if="quiz.data.duration" class="flex flex-col space-x-1 my-4">
+		<div v-if="quiz.data.duration" class="flex flex-col space-x-1 my-4 px-2">
 			<div class="mb-2">
 				<span class="text-ink-gray-9"> {{ __('Time') }}: </span>
 				<span class="font-semibold text-ink-gray-9">
@@ -224,6 +224,7 @@
 					</div>
 					<div class="flex items-center justify-between mt-8">
 						<Checkbox
+							v-if="!quiz.data.show_answers"
 							:label="__('Mark for review')"
 							:model-value="reviewQuestions.includes(activeQuestion) ? 1 : 0"
 							@change="markForReview($event, activeQuestion)"
@@ -278,6 +279,7 @@
 								!showAnswers.length &&
 								questionDetails.data.type != 'Open Ended'
 							"
+							class="ml-auto"
 							@click="checkAnswer()"
 						>
 							<span>
@@ -289,12 +291,18 @@
 								activeQuestion != questions.length && quiz.data.show_answers
 							"
 							@click="nextQuestion()"
+							class="ml-auto"
 						>
 							<span>
 								{{ __('Next') }}
 							</span>
 						</Button>
-						<Button variant="solid" v-else @click="handleSubmitClick()">
+						<Button
+							variant="solid"
+							v-else
+							@click="handleSubmitClick()"
+							class="ml-auto"
+						>
 							<span>
 								{{ __('Submit') }}
 							</span>
@@ -891,10 +899,14 @@ const markLessonProgress = () => {
 }
 
 const handleSubmitClick = () => {
-	if (attemptedQuestions.value.length) {
-		switchQuestion(activeQuestion.value)
+	if (!quiz.data.show_answers) {
+		if (attemptedQuestions.value.length) {
+			switchQuestion(activeQuestion.value)
+		}
+		showSubmissionConfirmation.value = true
+	} else {
+		submitQuiz()
 	}
-	showSubmissionConfirmation.value = true
 }
 
 const paginationWindow = computed(() => {

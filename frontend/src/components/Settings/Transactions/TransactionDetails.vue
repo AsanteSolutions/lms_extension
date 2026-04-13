@@ -32,16 +32,14 @@
 		</div>
 		<div v-if="transactionData" class="overflow-y-auto">
 			<div class="grid grid-cols-3 gap-5">
-				<Switch
-					size="sm"
+				<FormControl
 					:label="__('Payment Received')"
-					:description="__('Mark the payment as received.')"
+					type="checkbox"
 					v-model="transactionData.payment_received"
 				/>
-				<Switch
-					size="sm"
+				<FormControl
 					:label="__('Payment For Certificate')"
-					:description="__('This payment is for a certificate.')"
+					type="checkbox"
 					v-model="transactionData.payment_for_certificate"
 				/>
 				<FormControl

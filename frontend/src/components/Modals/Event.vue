@@ -247,7 +247,7 @@ const evaluationResource = createResource({
 			member: props.event.member,
 			course: props.event.course,
 			batch_name: props.event.batch_name,
-			date: props.event.date,
+			date_value: props.event.date,
 			start_time: props.event.start_time,
 			end_time: props.event.end_time,
 			status: evaluation.status,

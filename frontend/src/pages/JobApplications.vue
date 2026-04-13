@@ -15,12 +15,21 @@
 				]"
 			/>
 		</header>
-		<div class="max-w-4xl mx-auto pt-5 p-4">
-			<div class="mb-6">
-				<h1 class="text-xl font-semibold text-ink-gray-7 mb-4 md:mb-0">
-					{{ applicationCount }}
-					{{ applicationCount === 1 ? __('Application') : __('Applications') }}
-				</h1>
+		<div class="mx-auto pt-5 p-4">
+			<div class="flex items-center justify-between mb-5">
+				<div class="text-lg font-semibold text-ink-gray-9 mb-4 md:mb-0">
+					{{ totalApplications.data }}
+					{{
+						totalApplications.data === 1
+							? __('Application')
+							: __('Applications')
+					}}
+				</div>
+				<FormControl v-model="search" type="text" placeholder="Search">
+					<template #prefix>
+						<FeatherIcon name="search" class="size-4 text-ink-gray-5" />
+					</template>
+				</FormControl>
 			</div>
 
 			<div v-if="applications.data?.length">
@@ -32,9 +41,10 @@
 						showTooltip: false,
 						selectable: false,
 					}"
+					class="h-[79vh] border-b"
 				>
 					<ListHeader
-						class="mb-2 grid items-center space-x-4 rounded bg-surface-gray-2 p-2"
+						class="mb-2 grid items-center rounded bg-surface-white border-b rounded-none p-2"
 					>
 						<ListHeaderItem
 							:item="item"
@@ -70,10 +80,7 @@
 
 									<span>{{ item }}</span>
 								</div>
-								<div
-									v-else-if="column.key === 'actions'"
-									class="flex justify-center"
-								>
+								<div v-else-if="column.key === 'actions'">
 									<Dropdown :options="getActionOptions(row)">
 										<Button variant="ghost">
 											<FeatherIcon name="more-horizontal" class="w-4 h-4" />
@@ -93,13 +100,15 @@
 						</ListRow>
 					</ListRows>
 				</ListView>
-				<div class="flex justify-center mt-5">
+				<div class="flex items-center justify-end space-x-3 mt-3">
 					<Button v-if="applications.hasNextPage" @click="applications.next()">
-						<template #prefix>
-							<RefreshCw class="size-4 stroke-1.5" />
-						</template>
 						{{ __('Load More') }}
 					</Button>
+					<div v-if="applications.hasNextPage" class="h-8 border-l"></div>
+					<div class="text-ink-gray-5">
+						{{ applications.data?.length }} {{ __('of') }}
+						{{ totalApplications.data }}
+					</div>
 				</div>
 			</div>
 			<EmptyState v-else-if="!applications.loading" type="Job Applications" />
@@ -172,8 +181,7 @@ import {
 	usePageMeta,
 	toast,
 } from 'frappe-ui'
-import { RefreshCw } from 'lucide-vue-next'
-import { computed, inject, onMounted, ref, reactive } from 'vue'
+import { computed, inject, ref, reactive, watch } from 'vue'
 import { sessionStore } from '../stores/session'
 import EmptyState from '@/components/EmptyState.vue'
 
@@ -181,7 +189,7 @@ const dayjs = inject('$dayjs')
 const { brand } = sessionStore()
 const showEmailModal = ref(false)
 const selectedApplicant = ref(null)
-const applicationCount = ref(0)
+const search = ref('')
 const emailForm = reactive({
 	subject: '',
 	message: '',
@@ -194,19 +202,6 @@ const props = defineProps({
 		required: true,
 	},
 })
-
-onMounted(() => {
-	getApplicationCount()
-})
-
-const getApplicationCount = () => {
-	call('frappe.client.get_count', {
-		doctype: 'LMS Job Application',
-		filters: { job: props.job },
-	}).then((count) => {
-		applicationCount.value = count
-	})
-}
 
 const applications = createListResource({
 	doctype: 'LMS Job Application',
@@ -223,6 +218,37 @@ const applications = createListResource({
 		job: props.job,
 	},
 	auto: true,
+})
+
+const totalApplications = createResource({
+	url: 'frappe.client.get_count',
+	params: {
+		doctype: 'LMS Job Application',
+		filters: {
+			job: props.job,
+		},
+	},
+	auto: true,
+	cache: ['totalApplications', props.job],
+	onError(err) {
+		toast.error(err.messages?.[0] || err)
+		console.error('Error fetching total applications:', err)
+	},
+})
+
+watch(search, () => {
+	let filters = {
+		job: props.job,
+		user: ['like', `%${search.value}%`],
+	}
+	applications.update({
+		filters: filters,
+	})
+	applications.reload()
+	totalApplications.update({
+		filters: filters,
+	})
+	totalApplications.reload()
 })
 
 const emailResource = createResource({
@@ -298,25 +324,26 @@ const applicationColumns = computed(() => {
 		{
 			label: __('Full Name'),
 			key: 'full_name',
-			width: 2,
+			width: 3,
 			icon: 'user',
 		},
 		{
 			label: __('Email'),
 			key: 'email',
-			width: 2,
+			width: 3,
 			icon: 'at-sign',
 		},
 		{
 			label: __('Applied On'),
 			key: 'applied_on',
-			width: 1,
+			width: 2,
 			icon: 'calendar',
 		},
 		{
 			label: '',
 			key: 'actions',
 			width: 1,
+			align: 'right',
 		},
 	]
 })
@@ -326,7 +353,7 @@ const applicantRows = computed(() => {
 	return applications.data.map((application) => ({
 		...application,
 		full_name: application.full_name,
-		applied_on: dayjs(application.creation).fromNow(),
+		applied_on: dayjs(application.creation).format('DD MMM YYYY'),
 	}))
 })
 

@@ -27,17 +27,15 @@
 				doctype="User"
 				:placeholder="__('Filter by Member')"
 			/>
-			<Switch
-				size="sm"
-				:label="__('Payment Received')"
-				:description="__('Mark the payment as received.')"
+			<FormControl
 				v-model="paymentReceived"
+				type="checkbox"
+				:label="__('Payment Received')"
 			/>
-			<Switch
-				size="sm"
-				:label="__('Payment For Certificate')"
-				:description="__('This payment is for a certificate.')"
+			<FormControl
 				v-model="paymentForCertificate"
+				type="checkbox"
+				:label="__('Payment for Certificate')"
 			/>
 		</div>
 
@@ -47,12 +45,12 @@
 				:rows="transactions.data"
 				row-key="name"
 				:options="{
-                    showTooltip: false,
-                    selectable: false,
-                    onRowClick: (row: { [key: string]: any }) => {
-                        openForm(row)
-                    },
-                }"
+          showTooltip: false,
+          selectable: false,
+          onRowClick: (row: { [key: string]: any }) => {
+            openForm(row)
+          },
+        }"
 			>
 				<ListHeader
 					class="mb-2 grid items-center space-x-4 rounded bg-surface-gray-2 p-2"

@@ -20,18 +20,17 @@
 		</Button>
 	</header>
 
-	<div class="md:w-3/4 md:mx-auto py-5 mx-5">
-		<div class="flex items-center justify-between mb-5">
-			<div v-if="assignmentCount" class="text-lg font-semibold text-ink-gray-9">
-				{{ __('{0} Assignments').format(assignmentCount) }}
+	<div class="py-5">
+		<div
+			class="flex flex-col md:flex-row md:items-center space-y-4 md:space-y-0 justify-between mb-5 mx-5"
+		>
+			<div class="text-lg font-semibold text-ink-gray-9">
+				{{ __('{0} Assignments').format(assignments.data?.length) }}
 			</div>
-			<div
-				v-if="assignments.data?.length || assignmentCount > 0"
-				class="grid grid-cols-2 gap-5"
-			>
+			<div class="grid grid-cols-2 gap-5">
 				<FormControl
 					v-model="titleFilter"
-					:placeholder="__('Search by title')"
+					:placeholder="__('Search by Title')"
 				/>
 				<FormControl
 					v-model="typeFilter"
@@ -48,23 +47,77 @@
 			row-key="name"
 			:options="{
 				showTooltip: false,
-				selectable: false,
+				selectable: true,
 				onRowClick: (row) => {
 					if (readOnlyMode) return
 					assignmentID = row.name
 					showAssignmentForm = true
 				},
 			}"
+			class="h-[71vh] lg:h-[79vh] px-5"
 		>
+			<ListHeader
+				class="mb-2 grid items-center rounded bg-surface-white border-b rounded-none p-2"
+			>
+				<ListHeaderItem :item="item" v-for="item in assignmentColumns">
+					<template #prefix="{ item }">
+						<FeatherIcon :name="item.icon?.toString()" class="h-4 w-4" />
+					</template>
+				</ListHeaderItem>
+			</ListHeader>
+			<ListRows>
+				<ListRow
+					v-for="row in assignments.data"
+					:row="row"
+					class="hover:bg-surface-gray-2"
+				>
+					<template #default="{ column, item }">
+						<ListRowItem :item="row[column.key]" :align="column.align">
+							<div v-if="column.key == 'show_answers'">
+								<FormControl
+									type="checkbox"
+									v-model="row[column.key]"
+									:disabled="true"
+								/>
+							</div>
+							<div
+								v-else-if="column.key == 'modified'"
+								class="text-sm text-ink-gray-5"
+							>
+								{{ row[column.key] }}
+							</div>
+							<div v-else>
+								{{ row[column.key] }}
+							</div>
+						</ListRowItem>
+					</template>
+				</ListRow>
+			</ListRows>
+			<ListSelectBanner class="bottom-50">
+				<template #actions="{ unselectAll, selections }">
+					<div class="flex gap-2">
+						<Button
+							variant="ghost"
+							@click="deleteAssignment(selections, unselectAll)"
+						>
+							<FeatherIcon name="trash-2" class="h-4 w-4 stroke-1.5" />
+						</Button>
+					</div>
+				</template>
+			</ListSelectBanner>
 		</ListView>
-		<EmptyState v-else type="Assignments" />
-		<div
-			v-if="assignments.data && assignments.hasNextPage"
-			class="flex justify-center my-5"
-		>
-			<Button @click="assignments.next()">
+		<div v-else class="h-[53vh]">
+			<EmptyState type="Assignments" />
+		</div>
+		<div class="flex items-center justify-end space-x-3 pt-3 border-t px-5">
+			<Button v-if="assignments.hasNextPage" @click="assignments.next()">
 				{{ __('Load More') }}
 			</Button>
+			<div v-if="assignments.hasNextPage" class="h-8 border-l"></div>
+			<div class="text-ink-gray-5">
+				{{ assignments.data?.length }} {{ __('of') }}
+				{{ totalAssignments.data }}
+			</div>
 		</div>
 	</div>
 	<AssignmentForm
@@ -79,8 +132,17 @@ import {
 	Button,
 	call,
 	createListResource,
+	createResource,
 	FormControl,
 	ListView,
+	ListHeader,
+	ListHeaderItem,
+	ListRows,
+	ListRow,
+	ListRowItem,
+	ListSelectBanner,
+	FeatherIcon,
+	toast,
 	usePageMeta,
 } from 'frappe-ui'
 import { computed, inject, onMounted, ref, watch } from 'vue'
@@ -96,7 +158,6 @@ const titleFilter = ref('')
 const typeFilter = ref('')
 const showAssignmentForm = ref(false)
 const assignmentID = ref('new')
-const assignmentCount = ref(0)
 const { brand } = sessionStore()
 const router = useRouter()
 const route = useRoute()
@@ -110,7 +171,6 @@ onMounted(() => {
 		assignmentID.value = 'new'
 		showAssignmentForm.value = true
 	}
-	getAssignmentCount()
 	titleFilter.value = router.currentRoute.value.query.title
 	typeFilter.value = router.currentRoute.value.query.type
 })
@@ -123,6 +183,10 @@ watch([titleFilter, typeFilter], () => {
 		},
 	})
 	reloadAssignments()
+	totalAssignments.update({
+		filters: assignmentFilter.value,
+	})
+	totalAssignments.reload()
 })
 
 const reloadAssignments = () => {
@@ -137,7 +201,7 @@ const assignmentFilter = computed(() => {
 	if (titleFilter.value) {
 		filters.title = ['like', `%${titleFilter.value}%`]
 	}
-	if (typeFilter.value) {
+	if (typeFilter.value && typeFilter.value.trim() !== '') {
 		filters.type = typeFilter.value
 	}
 	return filters
@@ -145,16 +209,30 @@ const assignmentFilter = computed(() => {
 
 const assignments = createListResource({
 	doctype: 'LMS Assignment',
-	fields: ['name', 'title', 'type', 'creation', 'question', 'course', 'custom_due_date'],
+	fields: ['name', 'title', 'type', 'modified', 'question', 'course', 'custom_due_date'],
 	orderBy: 'modified desc',
 	cache: ['assignments'],
 	transform(data) {
 		return data.map((row) => {
 			return {
 				...row,
-				creation: dayjs(row.creation).fromNow(),
+				modified: dayjs(row.modified).format('DD MMM YYYY'),
 			}
 		})
+	},
+})
+
+const totalAssignments = createResource({
+	url: 'frappe.client.get_count',
+	params: {
+		doctype: 'LMS Assignment',
+		filters: assignmentFilter.value,
+	},
+	auto: true,
+	cache: ['assignments_count', user.data?.name],
+	onError(err) {
+		toast.error(err.messages?.[0] || err)
+		console.error(err)
 	},
 })
 
@@ -163,33 +241,28 @@ const assignmentColumns = computed(() => {
 		{
 			label: __('Title'),
 			key: 'title',
-			width: 2,
+			width: 1,
+			icon: 'file-text',
 		},
 		{
 			label: __('Type'),
 			key: 'type',
 			width: 1,
 			align: 'left',
+			icon: 'tag',
 		},
 		{
-			label: __('Created'),
-			key: 'creation',
+			label: __('Updated On'),
+			key: 'modified',
 			width: 1,
 			align: 'right',
+			icon: 'clock',
 		},
 	]
 })
 
-const getAssignmentCount = () => {
-	call('frappe.client.get_count', {
-		doctype: 'LMS Assignment',
-	}).then((data) => {
-		assignmentCount.value = data
-	})
-}
-
 const assignmentTypes = computed(() => {
-	let types = ['', 'Document', 'Image', 'PDF', 'URL', 'Text']
+	let types = [' ', 'Document', 'Image', 'PDF', 'URL', 'Text']
 	return types.map((type) => {
 		return {
 			label: __(type),
@@ -197,6 +270,14 @@ const assignmentTypes = computed(() => {
 		}
 	})
 })
+
+const deleteAssignment = (selections, unselectAll) => {
+	Array.from(selections).forEach(async (assignmentName) => {
+		await assignments.delete.submit(assignmentName)
+	})
+	unselectAll()
+	toast.success(__('Assignments deleted successfully'))
+}
 
 const breadcrumbs = computed(() => [
 	{

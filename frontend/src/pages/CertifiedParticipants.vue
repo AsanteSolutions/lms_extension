@@ -12,9 +12,9 @@
 			</Button>
 		</router-link>
 	</header>
-	<div class="mx-auto w-full max-w-4xl pt-6 pb-10">
-		<div class="flex flex-col md:flex-row justify-between mb-8 px-3">
-			<div class="text-xl font-semibold text-ink-gray-9 mb-4 md:mb-0">
+	<div class="mx-auto w-full">
+		<div class="flex flex-col md:flex-row justify-between mb-5 px-5 pt-5">
+			<div class="text-lg font-semibold text-ink-gray-9 mb-4 md:mb-0">
 				{{ memberCount }} {{ __('Certified Members') }}
 			</div>
 			<div
@@ -41,99 +41,99 @@
 					</div>
 				</div>
 				<div class="flex items-center space-x-4">
-					<Switch
-						size="sm"
+					<FormControl
 						v-model="openToWork"
 						:label="__('Open to Work')"
+						type="checkbox"
 						@change="updateParticipants()"
 					/>
-					<Switch
-						size="sm"
+					<FormControl
 						v-model="hiring"
 						:label="__('Hiring')"
+						type="checkbox"
 						@change="updateParticipants()"
 					/>
 				</div>
 			</div>
 		</div>
-		<div v-if="participants.data?.length" class="">
-			<template v-for="(participant, index) in participants.data">
-				<router-link
-					:to="{
-						name: 'ProfileAbout',
-						params: {
-							username: participant.username,
-						},
-					}"
+		<div
+			v-if="participants.data?.length"
+			class="h-[63vh] lg:h-[77vh] overflow-y-auto mb-5 px-5"
+		>
+			<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+				<div
+					v-for="participant in participants.data"
+					class="flex flex-col border hover:border-outline-gray-3 rounded-lg p-3 text-ink-gray-9 cursor-pointer"
+					@click="
+						router.push({
+							name: 'ProfileAbout',
+							params: { username: participant.username },
+						})
+					"
 				>
-					<div class="rounded-md hover:bg-surface-gray-2 px-3">
-						<div
-							class="flex items-center w-full space-x-3 py-2"
-							:class="{
-								'border-b': index < participants.data.length - 1,
-							}"
-						>
-							<UserAvatar :user="participant" size="2xl" />
-
-							<div class="flex flex-col md:flex-row w-full">
-								<div class="flex-1">
-									<div class="text-base font-medium text-ink-gray-8">
-										{{ participant.full_name }}
-									</div>
-									<div
-										v-if="participant.headline"
-										class="mt-1.5 text-base text-ink-gray-5"
-									>
-										{{ participant.headline }}
-									</div>
-								</div>
-								<div
-									class="flex items-center space-x-3 md:space-x-24 text-sm md:text-base mt-1.5"
-								>
-									<div class="text-ink-gray-5">
-										{{ participant.certificate_count }}
-										{{
-											participant.certificate_count > 1
-												? __('certificates')
-												: __('certificate')
-										}}
-									</div>
-									<span class="text-ink-gray-4 md:hidden">·</span>
-									<div class="text-ink-gray-5">
-										{{ dayjs(participant.issue_date).format('DD MMM YYYY') }}
-									</div>
-								</div>
+					<div class="flex space-x-4">
+						<UserAvatar :user="participant" size="2xl" />
+						<div class="flex flex-col">
+							<div class="font-semibold line-clamp-1">
+								{{ participant.full_name }}
+							</div>
+							<div class="text-sm leading-5 line-clamp-1 mb-4">
+								{{
+									participant.headline ||
+									'Joined ' + dayjs(participant.creation).fromNow()
+								}}
 							</div>
 						</div>
 					</div>
-				</router-link>
-			</template>
+					<div class="mt-auto space-y-2 text-ink-gray-7">
+						<div class="flex items-center space-x-1">
+							<GraduationCap class="h-4 w-4 stroke-1.5 mr-1" />
+							<span>
+								{{ participant.certificate_count }}
+								{{
+									participant.certificate_count > 1
+										? __('certificates')
+										: __('certificate')
+								}}
+							</span>
+						</div>
+						<div class="flex items-center space-x-1">
+							<Calendar class="h-4 w-4 stroke-1.5 mr-1" />
+							<span>{{
+								dayjs(participant.issue_date).format('DD MMM YYYY')
+							}}</span>
+						</div>
+					</div>
+				</div>
+			</div>
 		</div>
-		<EmptyState v-else type="Certified Members" />
-		<div
-			v-if="!participants.list.loading && participants.hasNextPage"
-			class="flex justify-center mt-5"
-		>
-			<Button @click="participants.next()">
+		<div v-else class="h-[40vh] lg:h-[53vh] px-5">
+			<EmptyState type="Certified Members" />
+		</div>
+		<div class="flex items-center justify-end space-x-3 border-t pt-3 px-5">
+			<Button v-if="participants.hasNextPage" @click="participants.next()">
 				{{ __('Load More') }}
 			</Button>
+			<div v-if="participants.hasNextPage" class="h-8 border-l"></div>
+			<div class="text-ink-gray-5">
+				{{ participants.data?.length }} {{ __('of') }}
+				{{ memberCount }}
+			</div>
 		</div>
 	</div>
 </template>
 <script setup>
 import {
-	Avatar,
 	Breadcrumbs,
 	Button,
 	call,
 	createListResource,
 	FormControl,
 	Select,
-	Switch,
 	usePageMeta,
 } from 'frappe-ui'
 import { computed, inject, onMounted, ref } from 'vue'
-import { GraduationCap } from 'lucide-vue-next'
+import { GraduationCap, Calendar } from 'lucide-vue-next'
 import { sessionStore } from '../stores/session'
 import { useRouter } from 'vue-router'
 import EmptyState from '@/components/EmptyState.vue'
@@ -163,8 +163,8 @@ const participants = createListResource({
 	doctype: 'LMS Certificate',
 	url: 'lms.lms.api.get_certified_participants',
 	start: 0,
+	pageLength: 40,
 	cache: ['certified_participants'],
-	pageLength: 100,
 })
 
 const getMemberCount = () => {

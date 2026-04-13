@@ -403,8 +403,8 @@ export function getUserTimezone() {
 	}
 }
 
-export function getSidebarLinks() {
-	let links = getSidebarItems()
+export function getSidebarLinks(forMobile = false) {
+	let links = getSidebarItems(forMobile)
 
 	links.forEach((link) => {
 		link.items = link.items.filter((item) => {
@@ -419,7 +419,7 @@ export function getSidebarLinks() {
 	return links
 }
 
-const getSidebarItems = () => {
+const getSidebarItems = (forMobile = false) => {
 	const { userResource } = usersStore()
 	const { settings } = useSettings()
 
@@ -441,7 +441,7 @@ const getSidebarItems = () => {
 					icon: 'Search',
 					to: 'Search',
 					condition: () => {
-						return userResource?.data
+						return !forMobile && userResource?.data
 					},
 				},
 				{
@@ -449,7 +449,7 @@ const getSidebarItems = () => {
 					icon: 'Bell',
 					to: 'Notifications',
 					condition: () => {
-						return userResource?.data
+						return !forMobile && userResource?.data
 					},
 				},
 			],
@@ -476,7 +476,7 @@ const getSidebarItems = () => {
 					activeFor: ['Programs', 'ProgramDetail'],
 					await: true,
 					condition: () => {
-						return checkIfCanAddProgram()
+						return checkIfCanAddProgram(forMobile)
 					},
 				},
 				{
@@ -514,7 +514,8 @@ const getSidebarItems = () => {
 						: settings.data?.contact_us_email,
 					condition: () => {
 						return (
-							(settings?.data?.contact_us_email &&
+							(!forMobile &&
+								settings?.data?.contact_us_email &&
 								userResource?.data) ||
 							settings?.data?.contact_us_url
 						)
@@ -531,7 +532,7 @@ const getSidebarItems = () => {
 					icon: 'CircleHelp',
 					to: 'Quizzes',
 					condition: () => {
-						return isAdmin()
+						return !forMobile && isAdmin()
 					},
 					activeFor: [
 						'Quizzes',
@@ -546,7 +547,7 @@ const getSidebarItems = () => {
 					icon: 'Pencil',
 					to: 'Assignments',
 					condition: () => {
-						return isAdmin()
+						return !forMobile && isAdmin()
 					},
 					activeFor: [
 						'Assignments',
@@ -559,7 +560,7 @@ const getSidebarItems = () => {
 					icon: 'Code',
 					to: 'ProgrammingExercises',
 					condition: () => {
-						return isAdmin()
+						return !forMobile && isAdmin()
 					},
 					activeFor: [
 						'ProgrammingExercises',
@@ -581,10 +582,11 @@ const isAdmin = () => {
 	)
 }
 
-const checkIfCanAddProgram = () => {
+const checkIfCanAddProgram = (forMobile = false) => {
 	const { userResource } = usersStore()
 	const { programs } = useSettings()
 	if (!userResource.data) return false
+	if (forMobile) return false
 	if (userResource?.data?.is_moderator || userResource?.data?.is_instructor) {
 		return true
 	}
@@ -657,6 +659,8 @@ export const validateFile = async (
 		return error(
 			__('Only document file of type .doc or .docx are allowed.')
 		)
+	} else if (fileType == 'zip' && extension != 'zip') {
+		return error(__('Only ZIP files are allowed.'))
 	} else if (
 		['image', 'video'].includes(fileType) &&
 		!file.type.startsWith(`${fileType}/`)

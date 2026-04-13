@@ -6,6 +6,7 @@
 		<div class="space-x-2">
 			<router-link
 				v-if="exercises.data?.length"
+				class="hidden md:block"
 				:to="{
 					name: 'ProgrammingExerciseSubmissions',
 				}"
@@ -34,10 +35,12 @@
 			</Button>
 		</div>
 	</header>
-	<div class="p-5">
-		<div class="flex items-center justify-between mb-5">
+	<div class="py-5">
+		<div
+			class="flex flex-col md:flex-row md:items-center space-y-4 md:space-y-0 justify-between mb-5 px-5"
+		>
 			<div class="text-lg font-semibold text-ink-gray-9">
-				{{ __('{0} Exercises').format(exerciseCount) }}
+				{{ __('{0} Exercises').format(exercises.data?.length) }}
 			</div>
 			<div class="grid grid-cols-2 gap-5">
 				<FormControl
@@ -69,9 +72,10 @@
 						showForm = true
 					},
 				}"
+				class="h-[71vh] lg:h-[79vh] px-5"
 			>
 				<ListHeader
-					class="mb-2 grid items-center rounded bg-surface-gray-2 p-2"
+					class="mb-2 grid items-center rounded bg-surface-white border-b rounded-none p-2"
 				>
 					<ListHeaderItem :item="item" v-for="item in columns">
 						<template #prefix="{ item }">
@@ -114,21 +118,24 @@
 				</ListSelectBanner>
 			</ListView>
 		</div>
-		<EmptyState v-else type="Programming Exercises" />
-		<div
-			v-if="exercises.data && exercises.hasNextPage"
-			class="flex justify-center my-5"
-		>
-			<Button @click="exercises.next()">
+		<div v-else class="h-[45vh] lg:h-[53vh] px-5">
+			<EmptyState type="Programming Exercises" />
+		</div>
+		<div class="flex items-center justify-end space-x-3 px-5 pt-3 border-t">
+			<Button v-if="exercises.hasNextPage" @click="exercises.next()">
 				{{ __('Load More') }}
 			</Button>
+			<div v-if="exercises.hasNextPage" class="h-8 border-l"></div>
+			<div class="text-ink-gray-5">
+				{{ exercises.data?.length }} {{ __('of') }} {{ totalExercises.data }}
+			</div>
 		</div>
 	</div>
 	<ProgrammingExerciseForm
 		v-model="showForm"
 		v-model:exercises="exercises"
 		:exerciseID="exerciseID"
-		:getExerciseCount="getExerciseCount"
+		v-model:totalExercises="totalExercises"
 	/>
 </template>
 <script setup lang="ts">
@@ -137,6 +144,7 @@ import {
 	Breadcrumbs,
 	Button,
 	call,
+	createResource,
 	createListResource,
 	dayjs,
 	FeatherIcon,
@@ -156,7 +164,6 @@ import { sessionStore } from '@/stores/session'
 import { useRouter } from 'vue-router'
 import ProgrammingExerciseForm from '@/pages/ProgrammingExercises/ProgrammingExerciseForm.vue'
 
-const exerciseCount = ref<number>(0)
 const readOnlyMode = window.read_only_mode
 const { brand } = sessionStore()
 const showForm = ref<boolean>(false)
@@ -170,7 +177,6 @@ const { $dialog } = app?.appContext.config.globalProperties
 
 onMounted(() => {
 	validatePermissions()
-	getExerciseCount()
 })
 
 const validatePermissions = () => {
@@ -183,19 +189,6 @@ const validatePermissions = () => {
 			name: 'ProgrammingExerciseSubmissions',
 		})
 	}
-}
-
-const getExerciseCount = (filters: any = {}) => {
-	call('frappe.client.get_count', {
-		doctype: 'LMS Programming Exercise',
-		filters: filters,
-	})
-		.then((count: number) => {
-			exerciseCount.value = count
-		})
-		.catch((error: any) => {
-			console.error('Error fetching exercise count:', error)
-		})
 }
 
 const exercises = createListResource({
@@ -212,7 +205,10 @@ const updateList = () => {
 		filters: filters,
 	})
 	exercises.reload()
-	getExerciseCount(filters)
+	totalExercises.update({
+		filters: filters,
+	})
+	totalExercises.reload()
 }
 
 const getFilters = () => {
@@ -266,6 +262,20 @@ const deleteExercises = (selections: Set<string>, unselectAll: () => void) => {
 	unselectAll()
 }
 
+const totalExercises = createResource({
+	url: 'frappe.client.get_count',
+	params: {
+		doctype: 'LMS Programming Exercise',
+		filters: getFilters(),
+	},
+	auto: true,
+	cache: ['programming_exercises_count', user.data?.name],
+	onError(err: any) {
+		toast.error(err.messages?.[0] || err)
+		console.error(err)
+	},
+})
+
 const languages = [
 	{ label: ' ', value: ' ' },
 	{ label: 'Python', value: 'Python' },
@@ -277,13 +287,13 @@ const columns = computed(() => {
 		{
 			label: __('Title'),
 			key: 'title',
-			width: 3,
+			width: 1,
 			icon: 'file-text',
 		},
 		{
 			label: __('Language'),
 			key: 'language',
-			width: 2,
+			width: 1,
 			align: 'left',
 			icon: 'code',
 		},
@@ -292,6 +302,7 @@ const columns = computed(() => {
 			key: 'modified',
 			width: 1,
 			icon: 'clock',
+			align: 'right',
 		},
 	]
 })
