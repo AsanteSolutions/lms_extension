@@ -4,11 +4,18 @@ authors = [
     { name = "Asante Solutions", email = "apile@asantesolutions.co.za"}
 ]
 description = "Extension for Frappe LMS"
-requires-python = ">=3.14"
+requires-python = ">=3.10"
 readme = "README.md"
 dynamic = ["version"]
 dependencies = [
-    # "frappe~=16.0.0" # Installed and managed by bench.
+        # core dependencies
+    "websocket_client~=1.6.4",
+    "markdown~=3.5.1",
+    "beautifulsoup4>=4.12,<4.14",
+    "lxml~=6.0.2",
+    "cairocffi==1.5.1",
+    "razorpay~=1.4.1",
+    "fuzzywuzzy~=0.18.0",
 ]
 
 [build-system]
@@ -21,7 +28,10 @@ build-backend = "flit_core.buildapi"
 
 # These apt dependencies will be installed from Ubuntu repositories when you host your app on Frappe Cloud
 [deploy.dependencies.apt]
-packages = []
+packages = [
+    "libxml2-dev",
+    "libxslt1-dev",
+]
 
 [tool.ruff]
 line-length = 110
@@ -63,3 +73,11 @@ typing-modules = ["frappe.types.DF"]
 quote-style = "double"
 indent-style = "tab"
 docstring-code-format = true
+
+[tool.bench.frappe-dependencies]
+lms = ">=16.0.0,<17.0.0"
+
+[tool.bench.assets]
+build_dir = "./frontend"
+out_dir = "../lms_extension/public/frontend"
+index_html_path = "../lms_extension/www/_lms.html"
