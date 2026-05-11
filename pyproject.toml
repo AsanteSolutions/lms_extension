@@ -75,7 +75,7 @@ indent-style = "tab"
 docstring-code-format = true
 
 [tool.bench.frappe-dependencies]
-lms = ">=16.0.0,<17.0.0"
+lms = ">=2.0.0,<3.0.0"
 
 [tool.bench.assets]
 build_dir = "./frontend"
