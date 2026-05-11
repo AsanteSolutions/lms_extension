@@ -32,7 +32,7 @@
 			>
 				<div class="flex items-center justify-between">
 					<div class="text-lg font-semibold text-ink-gray-9 md:mb-0">
-						{{ __('{0} {1} Jobs').format(jobCount.data, activeTab) }}
+						{{ __('{0} {1} Jobs').format(jobCount.data ?? 0, activeTab) }}
 					</div>
 					<TabButtons
 						v-if="tabs.length > 1"
@@ -44,7 +44,7 @@
 				</div>
 
 				<div
-					class="flex flex-col md:flex-row md:items-center md:space-x-4 space-y-4 md:space-y-0"
+					class="flex flex-col md:flex-row md:items-center md:gap-x-4 space-y-4 md:space-y-0"
 				>
 					<TabButtons
 						v-if="tabs.length > 1"
@@ -53,7 +53,7 @@
 						class="hidden lg:block"
 						@change="updateJobs"
 					/>
-					<div class="flex items-center space-x-4">
+					<div class="flex items-center gap-x-4">
 						<FormControl
 							type="text"
 							:placeholder="__('Search')"
@@ -114,16 +114,16 @@
 				</div>
 			</div>
 			<div v-else class="h-[32vh] lg:h-[50vh] px-5">
-				<EmptyState type="Job Openings" />
+				<EmptyStateLayout name="Job Openings" />
 			</div>
-			<div class="flex items-center justify-end space-x-3 border-t pt-3 px-5">
+			<div class="flex items-center justify-end gap-x-3 border-t pt-3 px-5">
 				<Button v-if="jobs.hasNextPage" @click="jobs.next()">
 					{{ __('Load More') }}
 				</Button>
-				<div v-if="jobs.hasNextPage" class="h-8 border-l"></div>
+				<div v-if="jobs.hasNextPage" class="h-8 border-s"></div>
 				<div class="text-ink-gray-5">
 					{{ jobs.data?.length }} {{ __('of') }}
-					{{ jobCount.data }}
+					{{ jobCount.data ?? 0 }}
 				</div>
 			</div>
 		</div>
@@ -146,7 +146,7 @@ import { useSettings } from '@/stores/settings'
 import { inject, computed, ref, onMounted, watch } from 'vue'
 import JobCard from '@/components/JobCard.vue'
 import Link from '@/components/Controls/Link.vue'
-import EmptyState from '@/components/EmptyState.vue'
+import EmptyStateLayout from '@/components/Layouts/EmptyStateLayout.vue'
 
 const user = inject('$user')
 const jobType = ref(null)
@@ -191,10 +191,13 @@ const getClosedJobCount = () => {
 }
 
 const jobCount = createResource({
-	url: 'frappe.client.get_count',
-	params: {
-		doctype: 'Job Opportunity',
-		filters: filters.value,
+	url: 'lms.lms.api.get_job_opportunities_count',
+	cache: ['jobCount'],
+	makeParams() {
+		return {
+			filters: filters.value,
+			or_filters: orFilters.value,
+		}
 	},
 })
 
@@ -223,20 +226,15 @@ const updateJobs = () => {
 		orFilters: orFilters.value,
 	})
 	jobs.reload()
-	jobCount.update({
-		filters: filters.value,
-		orFilters: orFilters.value,
-	})
 	jobCount.reload()
 }
 
 const updateFilters = () => {
-	filters.value.status = 'Open'
+	filters.value.status = activeTab.value === 'Open' ? 'Open' : 'Closed'
 	updateJobTypeFilter()
 	updateWorkModeFilter()
 	updateSearchQueryFilter()
 	updateCountryFilter()
-	updateTabFilter()
 }
 
 const updateJobTypeFilter = () => {
@@ -272,18 +270,6 @@ const updateCountryFilter = () => {
 		filters.value.country = country.value
 	} else {
 		delete filters.value.country
-	}
-}
-
-const updateTabFilter = () => {
-	if (activeTab.value === 'Closed') {
-		filters.value.status = 'Closed'
-		if (!isModerator.value) {
-			filters.value.owner = user.data?.name
-		}
-	} else {
-		filters.value.status = 'Open'
-		delete filters.value.owner
 	}
 }
 

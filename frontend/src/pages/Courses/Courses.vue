@@ -19,7 +19,7 @@
 					<template #suffix>
 						<ChevronDown
 							:class="[
-								'w-4 h-4 stroke-1.5 ml-1 transform transition-transform',
+								'w-4 h-4 stroke-1.5 ms-1 transform transition-transform',
 								open ? 'rotate-180' : '',
 							]"
 						/>
@@ -36,7 +36,7 @@
 				{{ __('All Courses') }}
 			</div>
 			<div
-				class="flex flex-col space-y-3 lg:space-y-0 lg:flex-row lg:items-center lg:space-x-4"
+				class="flex flex-col space-y-3 lg:space-y-0 lg:flex-row lg:items-center lg:gap-x-4"
 			>
 				<TabButtons :buttons="courseTabs" v-model="currentTab" class="w-fit" />
 
@@ -80,7 +80,7 @@
 				<CourseCard :course="course" />
 			</router-link>
 		</div>
-		<EmptyState v-else-if="!courses.list.loading" type="Courses" />
+		<EmptyStateLayout v-else-if="!courses.list.loading" name="Courses" />
 		<div
 			v-if="!courses.list.loading && courses.hasNextPage"
 			class="flex justify-center mt-5"
@@ -119,7 +119,7 @@ import { ChevronDown, Plus } from 'lucide-vue-next'
 import { sessionStore } from '@/stores/session'
 import { canCreateCourse } from '@/utils'
 import CourseCard from '@/components/CourseCard.vue'
-import EmptyState from '@/components/EmptyState.vue'
+import EmptyStateLayout from '@/components/Layouts/EmptyStateLayout.vue'
 import { useRouter } from 'vue-router'
 import NewCourseModal from '@/pages/Courses/NewCourseModal.vue'
 import CourseImportModal from '@/pages/Courses/CourseImportModal.vue'
@@ -138,7 +138,7 @@ const currentCategory = ref(null)
 const title = ref('')
 const certification = ref(false)
 const filters = ref({})
-const currentTab = user.data?.is_student ? ref('enrolled') : ref('live')
+const currentTab = ref('live')
 const { brand } = sessionStore()
 const courseCount = ref(0)
 const router = useRouter()
@@ -167,15 +167,6 @@ const courses = createListResource({
 	cache: ['courses', user.data?.name],
 	pageLength: pageLength.value,
 	start: start.value,
-	transform(data) {
-		if(user.data?.is_instructor && (!user.data?.is_system_manager && !user.data?.is_moderator && !user.data?.is_evaluator)) {
-			return data.filter((element) => {
-				return element.instructors.some((instructor) => instructor.name === user.data?.name)
-			})
-		}
-
-		return data
-	},
 })
 
 const setCategories = (data) => {
@@ -322,24 +313,25 @@ watch(currentTab, () => {
 })
 
 const courseTabs = computed(() => {
-	let tabs = []
+	let tabs = [
+		{
+			label: __('Live'),
+			value: 'live',
+		},
+		{
+			label: __('New'),
+			value: 'new',
+		},
+		{
+			label: __('Upcoming'),
+			value: 'upcoming',
+		},
+	]
 	if (
 		user.data?.is_moderator ||
 		user.data?.is_instructor ||
 		user.data?.is_evaluator
 	) {
-		tabs.push({
-			label: __('Live'),
-			value: 'live',
-		})
-		tabs.push({
-			label: __('New'),
-			value: 'new',
-		})
-		tabs.push({
-			label: __('Upcoming'),
-			value: 'upcoming',
-		})
 		tabs.push({ label: __('Created'), value: 'created' })
 		tabs.push({ label: __('Unpublished'), value: 'unpublished' })
 	} else if (user.data) {

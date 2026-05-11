@@ -6,7 +6,7 @@
 			</div>
 			<div
 				:class="{
-					'flex justify-between space-x-8 w-full': section.columns.length > 1,
+					'flex justify-between gap-x-8 w-full': section.columns.length > 1,
 				}"
 			>
 				<div
@@ -64,7 +64,7 @@
 								</template>
 							</FileUploader>
 							<div v-else>
-								<div class="flex items-center text-sm space-x-2">
+								<div class="flex items-center text-sm gap-x-2">
 									<div
 										class="flex items-center justify-center rounded border border-outline-gray-modals bg-surface-gray-2"
 										:class="field.size == 'lg' ? 'px-5 py-5' : 'px-20 py-8'"
@@ -91,7 +91,7 @@
 									</div>
 									<X
 										@click="data[field.name] = null"
-										class="border text-ink-gray-7 border-outline-gray-modals rounded-md cursor-pointer stroke-1.5 w-5 h-5 p-1 ml-4"
+										class="border text-ink-gray-7 border-outline-gray-modals rounded-md cursor-pointer stroke-1.5 w-5 h-5 p-1 ms-4"
 									/>
 								</div>
 							</div>

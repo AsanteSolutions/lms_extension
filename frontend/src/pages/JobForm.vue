@@ -4,7 +4,7 @@
 			class="sticky top-0 z-10 flex items-center justify-between border-b bg-surface-white px-3 py-2.5 sm:px-5"
 		>
 			<Breadcrumbs :items="breadcrumbs" />
-			<div class="space-x-2">
+			<div class="flex items-center gap-x-2">
 				<Badge v-if="isDirty" theme="orange">
 					{{ __('Not Saved') }}
 				</Badge>
@@ -54,7 +54,7 @@
 						/>
 					</div>
 				</div>
-				<div class="border-l h-[93vh]">
+				<div class="border-s h-[93vh]">
 					<div v-if="jobName != 'new'" class="p-5 space-y-5 border-b">
 						<FormControl
 							v-model="job.status"

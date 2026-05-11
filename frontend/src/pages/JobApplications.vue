@@ -70,7 +70,7 @@
 							<ListRowItem :item="item">
 								<div
 									v-if="column.key === 'full_name'"
-									class="flex items-center space-x-3"
+									class="flex items-center gap-x-3"
 								>
 									<Avatar
 										size="sm"
@@ -100,18 +100,21 @@
 						</ListRow>
 					</ListRows>
 				</ListView>
-				<div class="flex items-center justify-end space-x-3 mt-3">
+				<div class="flex items-center justify-end gap-x-3 mt-3">
 					<Button v-if="applications.hasNextPage" @click="applications.next()">
 						{{ __('Load More') }}
 					</Button>
-					<div v-if="applications.hasNextPage" class="h-8 border-l"></div>
+					<div v-if="applications.hasNextPage" class="h-8 border-s"></div>
 					<div class="text-ink-gray-5">
 						{{ applications.data?.length }} {{ __('of') }}
 						{{ totalApplications.data }}
 					</div>
 				</div>
 			</div>
-			<EmptyState v-else-if="!applications.loading" type="Job Applications" />
+			<EmptyStateLayout
+				v-else-if="!applications.loading"
+				name="Job Applications"
+			/>
 		</div>
 
 		<Dialog
@@ -183,7 +186,7 @@ import {
 } from 'frappe-ui'
 import { computed, inject, ref, reactive, watch } from 'vue'
 import { sessionStore } from '../stores/session'
-import EmptyState from '@/components/EmptyState.vue'
+import EmptyStateLayout from '@/components/Layouts/EmptyStateLayout.vue'
 
 const dayjs = inject('$dayjs')
 const { brand } = sessionStore()

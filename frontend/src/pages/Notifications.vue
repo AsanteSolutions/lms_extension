@@ -5,7 +5,7 @@
 		<div class="flex-1">
 			<Breadcrumbs :items="breadcrumbs" />
 		</div>
-		<div class="flex items-center space-x-2 shrink-0">
+		<div class="flex items-center gap-x-2 shrink-0">
 			<Button
 				@click="markAllAsRead.submit"
 				:loading="markAllAsRead.loading"
@@ -25,7 +25,7 @@
 			v-if="notifications?.length"
 			v-for="log in notifications"
 			:key="log.name"
-			class="flex space-x-2 sm:space-x-3 px-1 sm:px-2 py-3 sm:py-4"
+			class="flex items-center gap-x-2 px-2 py-4"
 			:class="{
 				'cursor-pointer': log.link,
 				'items-center': !showDetails(log) && !isMentionOrComment(log),
@@ -37,18 +37,17 @@
 				size="xl"
 				:label="log.from_user_details.full_name"
 			/>
-			<div class="space-y-1.5 sm:space-y-2 w-full">
-				<div class="flex items-start sm:items-center justify-between gap-2">
-					<div class="flex-1 flex flex-row space-x-2 justify-between">
-						<div
-							class="text-ink-gray-9 text-sm sm:text-base leading-5"
-							v-html="log.subject"
-						></div>
-						<div class="text-xs text-ink-gray-5 whitespace-nowrap">
+			<div class="space-y-2 w-full">
+				<div class="flex items-center justify-between">
+					<div class="flex items-center">
+						<div class="text-ink-gray-9" v-html="log.subject"></div>
+					</div>
+					<div class="flex items-center gap-x-2">
+						<div class="text-sm text-ink-gray-5">
 							{{ dayjs(log.creation).fromNow() }}
 						</div>
 					</div>
-					<div class="flex items-center space-x-2 shrink-0">
+					<div class="flex items-center gap-x-2 shrink-0">
 						<Button
 							variant="ghost"
 							v-if="!log.read"
@@ -67,7 +66,7 @@
 				></div>
 				<div
 					v-else-if="showDetails(log)"
-					class="flex flex-col sm:flex-row sm:items-stretch border border-outline-gray-2 sm:space-x-2 rounded-md"
+					class="flex items-stretch border border-outline-gray-2 gap-x-2 rounded-md"
 				>
 					<iframe
 						v-if="
@@ -75,7 +74,7 @@
 							log.document_details.video_link
 						"
 						:src="`https://www.youtube.com/embed/${log.document_details.video_link}`"
-						class="sm:rounded-l-md rounded-t-md w-full sm:w-72"
+						class="rounded-s-md w-72"
 					/>
 					<video
 						v-else-if="
@@ -83,7 +82,7 @@
 							log.document_details.video_link
 						"
 						:src="log.document_details.video_link"
-						class="sm:rounded-l-md rounded-t-md w-full sm:w-72"
+						class="rounded-s-md w-72"
 					/>
 					<div class="p-3">
 						<div
@@ -103,7 +102,7 @@
 						</div>
 						<div
 							v-if="log.document_details.start_date"
-							class="flex items-center space-x-2 text-sm mt-5 text-ink-gray-7"
+							class="flex items-center gap-x-2 text-sm mt-5"
 						>
 							<Calendar class="size-3 stroke-1.5" />
 							<span>
@@ -114,7 +113,7 @@
 						</div>
 						<div
 							v-if="log.document_details.start_time"
-							class="flex items-center space-x-2 text-sm mt-2 text-ink-gray-7"
+							class="flex items-center gap-x-2 text-sm mt-2"
 						>
 							<Clock class="size-3 stroke-1.5" />
 							<span>
@@ -128,7 +127,7 @@
 						>
 							<div
 								v-for="instructor in log.document_details.instructors"
-								class="flex items-center space-x-2"
+								class="flex items-center gap-x-2"
 							>
 								<Avatar
 									:size="'sm'"
@@ -170,7 +169,7 @@ import {
 	Button,
 	createListResource,
 	createResource,
-	dayjs,
+	getCachedResource,
 	TabButtons,
 	usePageMeta,
 } from 'frappe-ui'
@@ -181,6 +180,7 @@ import { Bell, Calendar, Clock, X } from 'lucide-vue-next'
 import { formatTime } from '@/utils/'
 
 const { brand } = sessionStore()
+const dayjs = inject('$dayjs')
 const user = inject('$user')
 const socket = inject('$socket')
 const activeTab = ref('Unread')
@@ -220,6 +220,10 @@ const readNotifications = createListResource({
 	cache: 'Read Notifications',
 })
 
+const refreshSidebarCount = () => {
+	getCachedResource('Unread Notifications Count')?.reload()
+}
+
 const markAsRead = createResource({
 	url: 'frappe.desk.doctype.notification_log.notification_log.mark_as_read',
 	makeParams(values) {
@@ -230,6 +234,7 @@ const markAsRead = createResource({
 	onSuccess(data) {
 		unReadNotifications.reload()
 		readNotifications.reload()
+		refreshSidebarCount()
 	},
 })
 
@@ -238,6 +243,7 @@ const markAllAsRead = createResource({
 	onSuccess(data) {
 		unReadNotifications.reload()
 		readNotifications.reload()
+		refreshSidebarCount()
 	},
 })
 

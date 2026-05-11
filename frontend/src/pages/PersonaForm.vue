@@ -1,7 +1,7 @@
 <template>
 	<div class="flex h-screen overflow-hidden sm:bg-gray-50">
 		<div class="relative h-full z-10 mx-auto sm:w-max pt-40">
-			<div class="mx-auto flex items-center justify-center space-x-2">
+			<div class="mx-auto flex items-center justify-center gap-x-2">
 				<LMSLogo class="size-7" />
 				<span
 					class="select-none text-xl font-semibold tracking-tight text-gray-900"
@@ -45,7 +45,7 @@
 				</div>
 			</div>
 			<div
-				class="text-center absolute bottom-0 right-0 left-0 mx-auto cursor-pointer text-sm pb-4"
+				class="text-center absolute bottom-0 end-0 start-0 mx-auto cursor-pointer text-sm pb-4"
 				@click="skipPersonaForm()"
 			>
 				{{ __('Skip') }}
