@@ -50,6 +50,7 @@
 							:onCreate="(value, close) => redirectToForm()"
 						/>
 						<Switch
+							v-if="route !== undefined"
 							size="sm"
 							:description="__('Only show assignments from the current course')"
 							:label="__('Filter assignments by course')"
