@@ -1,0 +1,135 @@
+From c68d7a261f6a234ff5b2579cc6f14f09937fa717 Mon Sep 17 00:00:00 2001
+From: Apile Tyumre <apile@asantesolutions.co.za>
+Date: Fri, 10 Apr 2026 15:45:42 +0200
+Subject: [PATCH] feat: Add ability to set assignment due date with
+ `custom_due_date`
+
+---
+ frontend/src/components/Assignment.vue           | 16 +++++++++++-----
+ .../src/components/Modals/AssignmentForm.vue     | 10 ++++++++++
+ frontend/src/pages/Assignments.vue               |  2 +-
+ 3 files changed, 22 insertions(+), 6 deletions(-)
+
+diff --git a/frontend/src/components/Assignment.vue b/frontend/src/components/Assignment.vue
+index 8740b9c..1d931fd 100644
+--- a/frontend/src/components/Assignment.vue
++++ b/frontend/src/components/Assignment.vue
+@@ -65,7 +65,11 @@
+ 							"Once the moderator grades your submission, you'll find the details here."
+ 						)
+ 					}}
+-					{{ __('Feel free to make edits to your submission if needed.') }}
++					<div v-if="
++						Date.parse(assignment.data?.custom_due_date) > Date.now()
++					">
++						{{ __('Feel free to make edits to your submission if needed.') }}
++					</div>
+ 				</div>
+ 				<div v-if="showUploader()" class="border rounded-lg p-3">
+ 					<div class="font-semibold mb-2">
+@@ -77,7 +81,7 @@
+ 						}}
+ 					</div>
+ 					<FileUploader
+-						v-if="!attachment"
++						v-if="!attachment && Date.parse(assignment.data?.custom_due_date) > Date.now()"
+ 						:fileTypes="getType()"
+ 						:uploadArgs="{
+ 							private: true,
+@@ -132,7 +136,7 @@
+ 						:readonly="!canModifyAssignment"
+ 					/>
+ 				</div>
+-				<div v-else>
++				<div v-else-if="assignment.data.type == 'Text'">
+ 					<div class="text-sm mb-2 text-ink-gray-7">
+ 						{{ __('Write your answer here') }}
+ 					</div>
+@@ -418,11 +422,13 @@ const canGradeSubmission = computed(() => {
+ })
+ 
+ const canModifyAssignment = computed(() => {
++	const duedate = Date.parse(assignment.data?.custom_due_date)
+ 	if (props.submissionName == 'new') {
+ 		return true
+ 	} else if (
+ 		submissionResource.doc?.owner == user.data?.name &&
+-		submissionResource.doc?.status == 'Not Graded'
++		submissionResource.doc?.status == 'Not Graded' &&
++		duedate > Date.now()
+ 	) {
+ 		return true
+ 	}
+@@ -450,6 +456,6 @@ const statusTheme = computed(() => {
+ })
+ 
+ const showUploader = () => {
+-	return ['PDF', 'Image', 'Document'].includes(assignment.data?.type)
++	return ['PDF', 'Image', 'Document'].includes(assignment.data?.type) 
+ }
+ </script>
+diff --git a/frontend/src/components/Modals/AssignmentForm.vue b/frontend/src/components/Modals/AssignmentForm.vue
+index 01bd32a..3748e53 100644
+--- a/frontend/src/components/Modals/AssignmentForm.vue
++++ b/frontend/src/components/Modals/AssignmentForm.vue
+@@ -27,6 +27,12 @@
+ 						:label="__('Submission Type')"
+ 						:required="true"
+ 					/>
++					<FormControl
++						v-model="assignment.custom_due_date"
++						type="datetime-local"
++						:label="__('Due Date')"
++						:required="true"
++					/>
+ 					<Link
+ 						v-model="assignment.course"
+ 						:label="__('Course')"
+@@ -83,6 +89,7 @@ interface Assignment {
+ 	type: string
+ 	question: string
+ 	course?: string
++	custom_due_date: string
+ }
+ 
+ interface Assignments {
+@@ -98,6 +105,7 @@ const assignment = reactive({
+ 	type: '',
+ 	question: '',
+ 	course: '',
++	custom_due_date: '',
+ })
+ 
+ const props = defineProps({
+@@ -117,6 +125,7 @@ watch(
+ 					assignment.type = row.type
+ 					assignment.question = row.question
+ 					assignment.course = row.course || ''
++					assignment.custom_due_date = row.custom_due_date
+ 				}
+ 			})
+ 		}
+@@ -129,6 +138,7 @@ watch(show, (newVal) => {
+ 		assignment.title = ''
+ 		assignment.type = ''
+ 		assignment.question = ''
++		assignment.custom_due_date = ''
+ 	}
+ })
+ 
+diff --git a/frontend/src/pages/Assignments.vue b/frontend/src/pages/Assignments.vue
+index 4f1a74e..cdf7640 100644
+--- a/frontend/src/pages/Assignments.vue
++++ b/frontend/src/pages/Assignments.vue
+@@ -145,7 +145,7 @@ const assignmentFilter = computed(() => {
+ 
+ const assignments = createListResource({
+ 	doctype: 'LMS Assignment',
+-	fields: ['name', 'title', 'type', 'creation', 'question', 'course'],
++	fields: ['name', 'title', 'type', 'creation', 'question', 'course', 'custom_due_date'],
+ 	orderBy: 'modified desc',
+ 	cache: ['assignments'],
+ 	transform(data) {
+-- 
+2.43.0
+

@@ -1,0 +1,28 @@
+From d2613cf1948b0c226f8a937b9897c2f59eb1c985 Mon Sep 17 00:00:00 2001
+From: Apile Tyumre <apile@asantesolutions.co.za>
+Date: Tue, 19 May 2026 11:28:11 +0200
+Subject: [PATCH] Add user-portal to sidebar
+
+---
+ frontend/src/utils/index.js | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/frontend/src/utils/index.js b/frontend/src/utils/index.js
+index f8c47a1..dc9eecc 100644
+--- a/frontend/src/utils/index.js
++++ b/frontend/src/utils/index.js
+@@ -506,6 +506,11 @@ const getSidebarItems = (forMobile = false) => {
+ 					to: 'Statistics',
+ 					activeFor: ['Statistics'],
+ 				},
++				{
++					label: 'Student Portal',
++					icon: 'LucideUser',
++					to: 'student-portal',
++				},
+ 				{
+ 					label: 'Contact Us',
+ 					icon: settings.data?.contact_us_url ? 'Headset' : 'Mail',
+-- 
+2.43.0
+
