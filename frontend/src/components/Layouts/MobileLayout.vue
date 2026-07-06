@@ -216,7 +216,9 @@ const handleClick = (tab) => {
 				username: userResource.data?.username,
 			},
 		})
-	else router.push({ name: tab.to })
+	else if (router.hasRoute(tab.to)) router.push({ name: tab.to })
+	else if (tab.to?.startsWith('http')) window.open(tab.to, '_blank')
+	else if (tab.to) window.location.href = `/${tab.to}`
 }
 
 const isVisible = (tab) => {
