@@ -1,0 +1,510 @@
+From f8df1a613651c7d6cb842203430531871ca86841 Mon Sep 17 00:00:00 2001
+From: Apile Tyumre <apile@asantesolutions.co.za>
+Date: Tue, 7 Jul 2026 09:15:48 +0200
+Subject: [PATCH] Reapply changes made to lms after update
+
+---
+ frontend/package.json                         |  4 +-
+ frontend/src/components/Assignment.vue        | 48 ++++++-------
+ .../src/components/Layouts/MobileLayout.vue   |  4 +-
+ .../src/components/Modals/AssignmentForm.vue  | 20 ++++--
+ frontend/src/pages/Assignments.vue            | 17 ++---
+ frontend/src/pages/Courses/Courses.vue        | 68 +++++++++----------
+ frontend/src/utils/index.js                   |  5 ++
+ frontend/vite.config.js                       | 23 ++-----
+ 8 files changed, 87 insertions(+), 102 deletions(-)
+
+diff --git a/frontend/package.json b/frontend/package.json
+index d6efe07..eddc864 100644
+--- a/frontend/package.json
++++ b/frontend/package.json
+@@ -6,8 +6,8 @@
+   "scripts": {
+     "dev": "vite",
+     "serve": "vite preview",
+-    "build": "vite build --base=/assets/lms/frontend/ && yarn copy-html-entry && yarn copy-colors-json",
+-    "copy-html-entry": "cp ../lms/public/frontend/index.html ../lms/www/_lms.html",
++    "build": "vite build --base=/assets/lms_extension/frontend/ && yarn copy-html-entry && yarn copy-colors-json",
++    "copy-html-entry": "cp ../lms_extension/public/frontend/index.html ../lms_extension/www/_lms.html",
+     "copy-colors-json": "cp node_modules/frappe-ui/tailwind/colors.json src/utils/frappe-ui-colors.json",
+     "test": "vitest run",
+     "test:watch": "vitest"
+diff --git a/frontend/src/components/Assignment.vue b/frontend/src/components/Assignment.vue
+index 291fc8c..fce5044 100644
+--- a/frontend/src/components/Assignment.vue
++++ b/frontend/src/components/Assignment.vue
+@@ -64,29 +64,31 @@
+ 					{{ __("You've successfully submitted the assignment.") }}
+ 					{{
+ 						__(
+-							"Once the moderator grades your submission, you'll find the details here."
++							"Once the moderator grades your submission, you'll find the details here.",
+ 						)
+ 					}}
+-					{{ __('Feel free to make edits to your submission if needed.') }}
++					<div v-if="Date.parse(assignment.data?.custom_due_date) > Date.now()">
++						{{ __('Feel free to make edits to your submission if needed.') }}
++					</div>
+ 				</div>
+ 				<div v-if="showUploader()" class="border rounded-lg p-3">
+ 					<div class="font-semibold mb-2">
+ 						{{ __('Upload Assignment') }}
+ 					</div>
+ 					<div class="text-ink-gray-5 text-sm mt-1 mb-4">
+-						{{
+-							__('You can only upload {0} files').format(assignment.data.type)
+-						}}
++						{{ __('You can only upload {0} files').format(assignment.data.type) }}
+ 					</div>
+ 					<FileUploader
+-						v-if="!attachment"
++						v-if="
++							!attachment &&
++							Date.parse(assignment.data?.custom_due_date) > Date.now()
++						"
+ 						:fileTypes="getType()"
+ 						:uploadArgs="{
+ 							private: true,
+ 						}"
+ 						:validateFile="
+-							(file) =>
+-								validateFile(file, true, assignment.data.type.toLowerCase())
++							(file) => validateFile(file, true, assignment.data.type.toLowerCase())
+ 						"
+ 						@success="(file) => saveSubmission(file)"
+ 					>
+@@ -128,13 +130,9 @@
+ 					<div class="text-p-sm-medium text-ink-gray-7 mb-1.5">
+ 						{{ __('Enter a URL') }}
+ 					</div>
+-					<FormControl
+-						v-model="answer"
+-						type="text"
+-						:readonly="!canModifyAssignment"
+-					/>
++					<FormControl v-model="answer" type="text" :readonly="!canModifyAssignment" />
+ 				</div>
+-				<div v-else>
++				<div v-else-if="assignment.data.type == 'Text'">
+ 					<div class="text-sm mb-2 text-ink-gray-7">
+ 						{{ __('Write your answer here') }}
+ 					</div>
+@@ -219,10 +217,7 @@ import {
+ } from 'frappe-ui'
+ import { computed, inject, ref, watch } from 'vue'
+ import ShortcutTooltip from '@/components/ShortcutTooltip.vue'
+-import {
+-	useKeyboardShortcuts,
+-	saveShortcut,
+-} from '@/composables/useKeyboardShortcuts'
++import { useKeyboardShortcuts, saveShortcut } from '@/composables/useKeyboardShortcuts'
+ import { useRouter } from 'vue-router'
+ import { validateFile } from '@/utils'
+ 
+@@ -314,9 +309,7 @@ const prepareSubmissionDoc = () => {
+ const addNewSubmission = () => {
+ 	let doc = prepareSubmissionDoc()
+ 	if (!doc.assignment_attachment && !doc.answer) {
+-		toast.error(
+-			__('Please provide an answer or upload a file before submitting.')
+-		)
++		toast.error(__('Please provide an answer or upload a file before submitting.'))
+ 		return
+ 	}
+ 	call('frappe.client.insert', {
+@@ -366,7 +359,7 @@ const updateSubmission = () => {
+ 				toast.error(err.messages?.[0] || err)
+ 				console.error(err)
+ 			},
+-		}
++		},
+ 	)
+ }
+ 
+@@ -377,8 +370,7 @@ const saveSubmission = (file) => {
+ 
+ const markLessonProgress = () => {
+ 	let pathname = window.location.pathname.split('/')
+-	if (!pathname.includes('courses'))
+-		pathname = window.parent.location.pathname.split('/')
++	if (!pathname.includes('courses')) pathname = window.parent.location.pathname.split('/')
+ 	if (pathname[2] != 'courses') return
+ 	let lessonIndex = pathname.pop().split('-')
+ 
+@@ -415,20 +407,20 @@ const removeSubmission = () => {
+ 
+ const canGradeSubmission = computed(() => {
+ 	return (
+-		(user.data?.is_moderator ||
+-			user.data?.is_evaluator ||
+-			user.data?.is_instructor) &&
++		(user.data?.is_moderator || user.data?.is_evaluator || user.data?.is_instructor) &&
+ 		props.submissionName != 'new' &&
+ 		router.currentRoute.value.name == 'AssignmentSubmission'
+ 	)
+ })
+ 
+ const canModifyAssignment = computed(() => {
++	const duedate = Date.parse(assignment.data?.custom_due_date)
+ 	if (props.submissionName == 'new') {
+ 		return true
+ 	} else if (
+ 		submissionResource.doc?.owner == user.data?.name &&
+-		submissionResource.doc?.status == 'Not Graded'
++		submissionResource.doc?.status == 'Not Graded' &&
++		duedate > Date.now()
+ 	) {
+ 		return true
+ 	}
+diff --git a/frontend/src/components/Layouts/MobileLayout.vue b/frontend/src/components/Layouts/MobileLayout.vue
+index 89cf403..8c5ee1a 100644
+--- a/frontend/src/components/Layouts/MobileLayout.vue
++++ b/frontend/src/components/Layouts/MobileLayout.vue
+@@ -223,7 +223,9 @@ const handleClick = (tab) => {
+ 				username: userResource.data?.username,
+ 			},
+ 		})
+-	else router.push({ name: tab.to })
++	else if (router.hasRoute(tab.to)) router.push({ name: tab.to })
++	else if (tab.to?.startsWith('http')) window.open(tab.to, '_blank')
++	else if (tab.to) window.location.href = `/${tab.to}`
+ }
+ 
+ const isVisible = (tab) => {
+diff --git a/frontend/src/components/Modals/AssignmentForm.vue b/frontend/src/components/Modals/AssignmentForm.vue
+index 9b5704c..c80ae9c 100644
+--- a/frontend/src/components/Modals/AssignmentForm.vue
++++ b/frontend/src/components/Modals/AssignmentForm.vue
+@@ -4,9 +4,7 @@
+ 			<div class="p-5 text-base">
+ 				<div class="text-xl-semibold text-ink-gray-9 mb-5">
+ 					{{
+-						assignmentID === 'new'
+-							? __('Create an Assignment')
+-							: __('Edit Assignment')
++						assignmentID === 'new' ? __('Create an Assignment') : __('Edit Assignment')
+ 					}}
+ 				</div>
+ 				<div class="space-y-4 max-h-[75vh] overflow-y-auto p-1">
+@@ -22,6 +20,12 @@
+ 						:label="__('Submission Type')"
+ 						:required="true"
+ 					/>
++					<FormControl
++						v-model="assignment.custom_due_date"
++						type="datetime-local"
++						:label="__('Due Date')"
++						:required="true"
++					/>
+ 					<Link
+ 						v-model="assignment.course"
+ 						:label="__('Course')"
+@@ -78,6 +82,7 @@ interface Assignment {
+ 	type: string
+ 	question: string
+ 	course?: string
++	custom_due_date: string
+ }
+ 
+ interface Assignments {
+@@ -93,6 +98,7 @@ const assignment = reactive({
+ 	type: '',
+ 	question: '',
+ 	course: '',
++	custom_due_date: '',
+ })
+ 
+ const props = defineProps({
+@@ -112,11 +118,12 @@ watch(
+ 					assignment.type = row.type
+ 					assignment.question = row.question
+ 					assignment.course = row.course || ''
++					assignment.custom_due_date = row.custom_due_date
+ 				}
+ 			})
+ 		}
+ 	},
+-	{ flush: 'post' }
++	{ flush: 'post' },
+ )
+ 
+ watch(show, (newVal) => {
+@@ -124,6 +131,7 @@ watch(show, (newVal) => {
+ 		assignment.title = ''
+ 		assignment.type = ''
+ 		assignment.question = ''
++		assignment.custom_due_date = ''
+ 	}
+ })
+ 
+@@ -151,7 +159,7 @@ const createAssignment = () => {
+ 				show.value = false
+ 				toast.success(__('Assignment created successfully'))
+ 			},
+-		}
++		},
+ 	)
+ }
+ 
+@@ -166,7 +174,7 @@ const updateAssignment = () => {
+ 				show.value = false
+ 				toast.success(__('Assignment updated successfully'))
+ 			},
+-		}
++		},
+ 	)
+ }
+ 
+diff --git a/frontend/src/pages/Assignments.vue b/frontend/src/pages/Assignments.vue
+index 4996571..5ed79b9 100644
+--- a/frontend/src/pages/Assignments.vue
++++ b/frontend/src/pages/Assignments.vue
+@@ -23,18 +23,12 @@
+ 	</LayoutHeader>
+ 
+ 	<div class="flex min-h-0 flex-1 flex-col pt-5">
+-		<div
+-			class="mx-5 mb-5 flex flex-col justify-between gap-y-4 sm:flex-row sm:items-center"
+-		>
++		<div class="mx-5 mb-5 flex flex-col justify-between gap-y-4 sm:flex-row sm:items-center">
+ 			<div class="text-xl-semibold text-ink-gray-9">
+ 				{{ __('{0} Assignments').format(totalAssignments.data || 0) }}
+ 			</div>
+ 			<div class="flex flex-col gap-3 sm:flex-row md:gap-5">
+-				<FormControl
+-					type="text"
+-					v-model="titleFilter"
+-					:placeholder="__('Search')"
+-				>
++				<FormControl type="text" v-model="titleFilter" :placeholder="__('Search')">
+ 					<template #prefix>
+ 						<span class="lucide-search size-4 text-ink-gray-5" />
+ 					</template>
+@@ -102,10 +96,7 @@
+ 			<ListSelectBanner class="bottom-50">
+ 				<template #actions="{ unselectAll, selections }">
+ 					<div class="flex gap-2">
+-						<Button
+-							variant="ghost"
+-							@click="deleteAssignment(selections, unselectAll)"
+-						>
++						<Button variant="ghost" @click="deleteAssignment(selections, unselectAll)">
+ 							<span class="lucide-trash-2 h-4 w-4" />
+ 						</Button>
+ 					</div>
+@@ -232,7 +223,7 @@ const assignmentFilter = computed(() => {
+ 
+ const assignments = createListResource({
+ 	doctype: 'LMS Assignment',
+-	fields: ['name', 'title', 'type', 'modified', 'question', 'course'],
++	fields: ['name', 'title', 'type', 'modified', 'question', 'course', 'custom_due_date'],
+ 	orderBy: 'modified desc',
+ 	cache: ['assignments'],
+ 	transform(data) {
+diff --git a/frontend/src/pages/Courses/Courses.vue b/frontend/src/pages/Courses/Courses.vue
+index 129d12a..d8846e7 100644
+--- a/frontend/src/pages/Courses/Courses.vue
++++ b/frontend/src/pages/Courses/Courses.vue
+@@ -72,11 +72,7 @@
+ 				</Tooltip>
+ 			</div>
+ 		</div>
+-		<SkeletonLoader
+-			v-if="courses.list.loading && !courses.data"
+-			variant="cards"
+-			:count="8"
+-		/>
++		<SkeletonLoader v-if="courses.list.loading && !courses.data" variant="cards" :count="8" />
+ 		<div
+ 			v-else-if="courses.data?.length"
+ 			class="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"
+@@ -91,25 +87,15 @@
+ 		<div v-else-if="!courses.list.loading" class="flex-1">
+ 			<EmptyStateLayout name="Courses" icon="lucide-book-open" />
+ 		</div>
+-		<div
+-			v-if="!courses.list.loading && courses.hasNextPage"
+-			class="flex justify-center mt-5"
+-		>
++		<div v-if="!courses.list.loading && courses.hasNextPage" class="flex justify-center mt-5">
+ 			<Button @click="courses.next()">
+ 				{{ __('Load More') }}
+ 			</Button>
+ 		</div>
+ 	</div>
+-	<NewCourseModal
+-		v-if="showCourseModal"
+-		v-model="showCourseModal"
+-		:courses="courses"
+-	/>
++	<NewCourseModal v-if="showCourseModal" v-model="showCourseModal" :courses="courses" />
+ 
+-	<CourseImportModal
+-		v-if="showCourseImportModal"
+-		v-model="showCourseImportModal"
+-	/>
++	<CourseImportModal v-if="showCourseImportModal" v-model="showCourseImportModal" />
+ </template>
+ <script setup>
+ import {
+@@ -143,7 +129,7 @@ const currentCategory = ref(null)
+ const title = ref('')
+ const certification = ref(false)
+ const filters = ref({})
+-const currentTab = ref('live')
++const currentTab = user.data?.is_student ? ref('enrolled') : ref('live')
+ const { brand } = sessionStore()
+ const courseCount = ref(0)
+ const router = useRouter()
+@@ -174,6 +160,22 @@ const courses = createListResource({
+ 	cache: ['courses', user.data?.name],
+ 	pageLength: pageLength.value,
+ 	start: start.value,
++	transform(data) {
++		if (
++			user.data?.is_instructor &&
++			!user.data?.is_system_manager &&
++			!user.data?.is_moderator &&
++			!user.data?.is_evaluator
++		) {
++			return data.filter((element) => {
++				return element.instructors.some(
++					(instructor) => instructor.name === user.data?.name,
++				)
++			})
++		}
++
++		return data
++	},
+ })
+ 
+ const categories = createListResource({
+@@ -255,10 +257,7 @@ const updateTabFilter = () => {
+ 			filters.value['upcoming'] = 1
+ 		} else if (currentTab.value == 'new') {
+ 			filters.value['published'] = 1
+-			filters.value['published_on'] = [
+-				'>=',
+-				dayjs().add(-3, 'month').format('YYYY-MM-DD'),
+-			]
++			filters.value['published_on'] = ['>=', dayjs().add(-3, 'month').format('YYYY-MM-DD')]
+ 		} else if (currentTab.value == 'created') {
+ 			filters.value['created'] = 1
+ 		} else if (currentTab.value == 'unpublished') {
+@@ -302,21 +301,20 @@ watch(currentTab, () => {
+ })
+ 
+ const courseTabs = computed(() => {
+-	let tabs = [
+-		{
+-			label: __('Published'),
++	let tabs = []
++	if (user.data?.is_moderator || user.data?.is_instructor || user.data?.is_evaluator) {
++		tabs.push({
++			label: __('Live'),
+ 			value: 'live',
+-		},
+-		{
++		})
++		tabs.push({
++			label: __('New'),
++			value: 'new',
++		})
++		tabs.push({
+ 			label: __('Upcoming'),
+ 			value: 'upcoming',
+-		},
+-	]
+-	if (
+-		user.data?.is_moderator ||
+-		user.data?.is_instructor ||
+-		user.data?.is_evaluator
+-	) {
++		})
+ 		tabs.push({ label: __('Created'), value: 'created' })
+ 		tabs.push({ label: __('Unpublished'), value: 'unpublished' })
+ 	} else if (user.data) {
+diff --git a/frontend/src/utils/index.js b/frontend/src/utils/index.js
+index fb7f5cf..ccfa268 100644
+--- a/frontend/src/utils/index.js
++++ b/frontend/src/utils/index.js
+@@ -548,6 +548,11 @@ const getSidebarItems = (forMobile = false) => {
+ 					to: 'Statistics',
+ 					activeFor: ['Statistics'],
+ 				},
++				{
++					label: 'Student Portal',
++					icon: 'LucideUser',
++					to: 'student-portal',
++				},
+ 				{
+ 					label: 'Contact Us',
+ 					icon: settings.data?.contact_us_url ? 'Headset' : 'Mail',
+diff --git a/frontend/vite.config.js b/frontend/vite.config.js
+index 15d0467..e96eb42 100644
+--- a/frontend/vite.config.js
++++ b/frontend/vite.config.js
+@@ -17,7 +17,7 @@ export default defineConfig(async ({ mode }) => {
+ 				lucideIcons: true,
+ 				jinjaBootData: true,
+ 				buildConfig: {
+-					indexHtmlPath: '../lms/www/_lms.html',
++					indexHtmlPath: '../lms_extension/www/_lms.html',
+ 				},
+ 			}),
+ 			vue(),
+@@ -29,12 +29,11 @@ export default defineConfig(async ({ mode }) => {
+ 				workbox: {
+ 					cleanupOutdatedCaches: true,
+ 					maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+-					globDirectory: '/assets/lms/frontend',
++					globDirectory: '/assets/lms_extension/frontend',
+ 					globPatterns: ['**/*.{js,ts,css,html,svg}'],
+ 					runtimeCaching: [
+ 						{
+-							urlPattern: ({ request }) =>
+-								request.destination === 'document',
++							urlPattern: ({ request }) => request.destination === 'document',
+ 							handler: 'NetworkFirst',
+ 							options: {
+ 								cacheName: 'html-cache',
+@@ -57,8 +56,7 @@ export default defineConfig(async ({ mode }) => {
+ 			proxy: {
+ 				'/scorm': {
+ 					target: 'http://127.0.0.1:8000',
+-					router: (req) =>
+-						`http://${req.headers.host.split(':')[0]}:8000`,
++					router: (req) => `http://${req.headers.host.split(':')[0]}:8000`,
+ 				},
+ 			},
+ 		},
+@@ -76,13 +74,7 @@ export default defineConfig(async ({ mode }) => {
+ 			],
+ 		},
+ 		optimizeDeps: {
+-			include: [
+-				'feather-icons',
+-				'tailwind.config.js',
+-				'interactjs',
+-				'highlight.js',
+-				'plyr',
+-			],
++			include: ['feather-icons', 'tailwind.config.js', 'interactjs', 'highlight.js', 'plyr'],
+ 			exclude: mode === 'production' ? [] : ['frappe-ui'],
+ 		},
+ 	}
+@@ -95,10 +87,7 @@ async function importFrappeUIPlugin(isDev) {
+ 			const module = await import('../frappe-ui/vite')
+ 			return module.default
+ 		} catch (error) {
+-			console.warn(
+-				'Local frappe-ui not found, falling back to npm package:',
+-				error.message
+-			)
++			console.warn('Local frappe-ui not found, falling back to npm package:', error.message)
+ 		}
+ 	}
+ 	// Fall back to npm package if local import fails
+-- 
+2.43.0
+
