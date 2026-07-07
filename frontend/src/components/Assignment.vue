@@ -64,29 +64,31 @@
 					{{ __("You've successfully submitted the assignment.") }}
 					{{
 						__(
-							"Once the moderator grades your submission, you'll find the details here."
+							"Once the moderator grades your submission, you'll find the details here.",
 						)
 					}}
-					{{ __('Feel free to make edits to your submission if needed.') }}
+					<div v-if="Date.parse(assignment.data?.custom_due_date) > Date.now()">
+						{{ __('Feel free to make edits to your submission if needed.') }}
+					</div>
 				</div>
 				<div v-if="showUploader()" class="border rounded-lg p-3">
 					<div class="font-semibold mb-2">
 						{{ __('Upload Assignment') }}
 					</div>
 					<div class="text-ink-gray-5 text-sm mt-1 mb-4">
-						{{
-							__('You can only upload {0} files').format(assignment.data.type)
-						}}
+						{{ __('You can only upload {0} files').format(assignment.data.type) }}
 					</div>
 					<FileUploader
-						v-if="!attachment"
+						v-if="
+							!attachment &&
+							Date.parse(assignment.data?.custom_due_date) > Date.now()
+						"
 						:fileTypes="getType()"
 						:uploadArgs="{
 							private: true,
 						}"
 						:validateFile="
-							(file) =>
-								validateFile(file, true, assignment.data.type.toLowerCase())
+							(file) => validateFile(file, true, assignment.data.type.toLowerCase())
 						"
 						@success="(file) => saveSubmission(file)"
 					>
@@ -128,13 +130,9 @@
 					<div class="text-p-sm-medium text-ink-gray-7 mb-1.5">
 						{{ __('Enter a URL') }}
 					</div>
-					<FormControl
-						v-model="answer"
-						type="text"
-						:readonly="!canModifyAssignment"
-					/>
+					<FormControl v-model="answer" type="text" :readonly="!canModifyAssignment" />
 				</div>
-				<div v-else>
+				<div v-else-if="assignment.data.type == 'Text'">
 					<div class="text-sm mb-2 text-ink-gray-7">
 						{{ __('Write your answer here') }}
 					</div>
@@ -219,10 +217,7 @@ import {
 } from 'frappe-ui'
 import { computed, inject, ref, watch } from 'vue'
 import ShortcutTooltip from '@/components/ShortcutTooltip.vue'
-import {
-	useKeyboardShortcuts,
-	saveShortcut,
-} from '@/composables/useKeyboardShortcuts'
+import { useKeyboardShortcuts, saveShortcut } from '@/composables/useKeyboardShortcuts'
 import { useRouter } from 'vue-router'
 import { validateFile } from '@/utils'
 
@@ -314,9 +309,7 @@ const prepareSubmissionDoc = () => {
 const addNewSubmission = () => {
 	let doc = prepareSubmissionDoc()
 	if (!doc.assignment_attachment && !doc.answer) {
-		toast.error(
-			__('Please provide an answer or upload a file before submitting.')
-		)
+		toast.error(__('Please provide an answer or upload a file before submitting.'))
 		return
 	}
 	call('frappe.client.insert', {
@@ -366,7 +359,7 @@ const updateSubmission = () => {
 				toast.error(err.messages?.[0] || err)
 				console.error(err)
 			},
-		}
+		},
 	)
 }
 
@@ -377,8 +370,7 @@ const saveSubmission = (file) => {
 
 const markLessonProgress = () => {
 	let pathname = window.location.pathname.split('/')
-	if (!pathname.includes('courses'))
-		pathname = window.parent.location.pathname.split('/')
+	if (!pathname.includes('courses')) pathname = window.parent.location.pathname.split('/')
 	if (pathname[2] != 'courses') return
 	let lessonIndex = pathname.pop().split('-')
 
@@ -415,20 +407,20 @@ const removeSubmission = () => {
 
 const canGradeSubmission = computed(() => {
 	return (
-		(user.data?.is_moderator ||
-			user.data?.is_evaluator ||
-			user.data?.is_instructor) &&
+		(user.data?.is_moderator || user.data?.is_evaluator || user.data?.is_instructor) &&
 		props.submissionName != 'new' &&
 		router.currentRoute.value.name == 'AssignmentSubmission'
 	)
 })
 
 const canModifyAssignment = computed(() => {
+	const duedate = Date.parse(assignment.data?.custom_due_date)
 	if (props.submissionName == 'new') {
 		return true
 	} else if (
 		submissionResource.doc?.owner == user.data?.name &&
-		submissionResource.doc?.status == 'Not Graded'
+		submissionResource.doc?.status == 'Not Graded' &&
+		duedate > Date.now()
 	) {
 		return true
 	}

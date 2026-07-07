@@ -17,7 +17,7 @@ export default defineConfig(async ({ mode }) => {
 				lucideIcons: true,
 				jinjaBootData: true,
 				buildConfig: {
-					indexHtmlPath: '../lms/www/_lms.html',
+					indexHtmlPath: '../lms_extension/www/_lms.html',
 				},
 			}),
 			vue(),
@@ -29,12 +29,11 @@ export default defineConfig(async ({ mode }) => {
 				workbox: {
 					cleanupOutdatedCaches: true,
 					maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
-					globDirectory: '/assets/lms/frontend',
+					globDirectory: '/assets/lms_extension/frontend',
 					globPatterns: ['**/*.{js,ts,css,html,svg}'],
 					runtimeCaching: [
 						{
-							urlPattern: ({ request }) =>
-								request.destination === 'document',
+							urlPattern: ({ request }) => request.destination === 'document',
 							handler: 'NetworkFirst',
 							options: {
 								cacheName: 'html-cache',
@@ -57,8 +56,7 @@ export default defineConfig(async ({ mode }) => {
 			proxy: {
 				'/scorm': {
 					target: 'http://127.0.0.1:8000',
-					router: (req) =>
-						`http://${req.headers.host.split(':')[0]}:8000`,
+					router: (req) => `http://${req.headers.host.split(':')[0]}:8000`,
 				},
 			},
 		},
@@ -76,13 +74,7 @@ export default defineConfig(async ({ mode }) => {
 			],
 		},
 		optimizeDeps: {
-			include: [
-				'feather-icons',
-				'tailwind.config.js',
-				'interactjs',
-				'highlight.js',
-				'plyr',
-			],
+			include: ['feather-icons', 'tailwind.config.js', 'interactjs', 'highlight.js', 'plyr'],
 			exclude: mode === 'production' ? [] : ['frappe-ui'],
 		},
 	}
@@ -95,10 +87,7 @@ async function importFrappeUIPlugin(isDev) {
 			const module = await import('../frappe-ui/vite')
 			return module.default
 		} catch (error) {
-			console.warn(
-				'Local frappe-ui not found, falling back to npm package:',
-				error.message
-			)
+			console.warn('Local frappe-ui not found, falling back to npm package:', error.message)
 		}
 	}
 	// Fall back to npm package if local import fails

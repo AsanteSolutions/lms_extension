@@ -72,11 +72,7 @@
 				</Tooltip>
 			</div>
 		</div>
-		<SkeletonLoader
-			v-if="courses.list.loading && !courses.data"
-			variant="cards"
-			:count="8"
-		/>
+		<SkeletonLoader v-if="courses.list.loading && !courses.data" variant="cards" :count="8" />
 		<div
 			v-else-if="courses.data?.length"
 			class="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"
@@ -91,25 +87,15 @@
 		<div v-else-if="!courses.list.loading" class="flex-1">
 			<EmptyStateLayout name="Courses" icon="lucide-book-open" />
 		</div>
-		<div
-			v-if="!courses.list.loading && courses.hasNextPage"
-			class="flex justify-center mt-5"
-		>
+		<div v-if="!courses.list.loading && courses.hasNextPage" class="flex justify-center mt-5">
 			<Button @click="courses.next()">
 				{{ __('Load More') }}
 			</Button>
 		</div>
 	</div>
-	<NewCourseModal
-		v-if="showCourseModal"
-		v-model="showCourseModal"
-		:courses="courses"
-	/>
+	<NewCourseModal v-if="showCourseModal" v-model="showCourseModal" :courses="courses" />
 
-	<CourseImportModal
-		v-if="showCourseImportModal"
-		v-model="showCourseImportModal"
-	/>
+	<CourseImportModal v-if="showCourseImportModal" v-model="showCourseImportModal" />
 </template>
 <script setup>
 import {
@@ -143,7 +129,7 @@ const currentCategory = ref(null)
 const title = ref('')
 const certification = ref(false)
 const filters = ref({})
-const currentTab = ref('live')
+const currentTab = user.data?.is_student ? ref('enrolled') : ref('live')
 const { brand } = sessionStore()
 const courseCount = ref(0)
 const router = useRouter()
@@ -174,6 +160,22 @@ const courses = createListResource({
 	cache: ['courses', user.data?.name],
 	pageLength: pageLength.value,
 	start: start.value,
+	transform(data) {
+		if (
+			user.data?.is_instructor &&
+			!user.data?.is_system_manager &&
+			!user.data?.is_moderator &&
+			!user.data?.is_evaluator
+		) {
+			return data.filter((element) => {
+				return element.instructors.some(
+					(instructor) => instructor.name === user.data?.name,
+				)
+			})
+		}
+
+		return data
+	},
 })
 
 const categories = createListResource({
@@ -255,10 +257,7 @@ const updateTabFilter = () => {
 			filters.value['upcoming'] = 1
 		} else if (currentTab.value == 'new') {
 			filters.value['published'] = 1
-			filters.value['published_on'] = [
-				'>=',
-				dayjs().add(-3, 'month').format('YYYY-MM-DD'),
-			]
+			filters.value['published_on'] = ['>=', dayjs().add(-3, 'month').format('YYYY-MM-DD')]
 		} else if (currentTab.value == 'created') {
 			filters.value['created'] = 1
 		} else if (currentTab.value == 'unpublished') {
@@ -302,21 +301,20 @@ watch(currentTab, () => {
 })
 
 const courseTabs = computed(() => {
-	let tabs = [
-		{
-			label: __('Published'),
+	let tabs = []
+	if (user.data?.is_moderator || user.data?.is_instructor || user.data?.is_evaluator) {
+		tabs.push({
+			label: __('Live'),
 			value: 'live',
-		},
-		{
+		})
+		tabs.push({
+			label: __('New'),
+			value: 'new',
+		})
+		tabs.push({
 			label: __('Upcoming'),
 			value: 'upcoming',
-		},
-	]
-	if (
-		user.data?.is_moderator ||
-		user.data?.is_instructor ||
-		user.data?.is_evaluator
-	) {
+		})
 		tabs.push({ label: __('Created'), value: 'created' })
 		tabs.push({ label: __('Unpublished'), value: 'unpublished' })
 	} else if (user.data) {

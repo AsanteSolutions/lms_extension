@@ -23,18 +23,12 @@
 	</LayoutHeader>
 
 	<div class="flex min-h-0 flex-1 flex-col pt-5">
-		<div
-			class="mx-5 mb-5 flex flex-col justify-between gap-y-4 sm:flex-row sm:items-center"
-		>
+		<div class="mx-5 mb-5 flex flex-col justify-between gap-y-4 sm:flex-row sm:items-center">
 			<div class="text-xl-semibold text-ink-gray-9">
 				{{ __('{0} Assignments').format(totalAssignments.data || 0) }}
 			</div>
 			<div class="flex flex-col gap-3 sm:flex-row md:gap-5">
-				<FormControl
-					type="text"
-					v-model="titleFilter"
-					:placeholder="__('Search')"
-				>
+				<FormControl type="text" v-model="titleFilter" :placeholder="__('Search')">
 					<template #prefix>
 						<span class="lucide-search size-4 text-ink-gray-5" />
 					</template>
@@ -102,10 +96,7 @@
 			<ListSelectBanner class="bottom-50">
 				<template #actions="{ unselectAll, selections }">
 					<div class="flex gap-2">
-						<Button
-							variant="ghost"
-							@click="deleteAssignment(selections, unselectAll)"
-						>
+						<Button variant="ghost" @click="deleteAssignment(selections, unselectAll)">
 							<span class="lucide-trash-2 h-4 w-4" />
 						</Button>
 					</div>
@@ -232,7 +223,7 @@ const assignmentFilter = computed(() => {
 
 const assignments = createListResource({
 	doctype: 'LMS Assignment',
-	fields: ['name', 'title', 'type', 'modified', 'question', 'course'],
+	fields: ['name', 'title', 'type', 'modified', 'question', 'course', 'custom_due_date'],
 	orderBy: 'modified desc',
 	cache: ['assignments'],
 	transform(data) {
