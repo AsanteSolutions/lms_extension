@@ -1,20 +1,23 @@
 <template>
-	<div class="flex h-full flex-col relative">
-		<div class="h-full pb-10" id="scrollContainer">
+	<div class="relative flex h-screen flex-col">
+		<div
+			class="flex flex-1 flex-col overflow-y-auto pb-10"
+			id="scrollContainer"
+		>
 			<slot />
 		</div>
 
 		<div class="relative z-20">
 			<!-- Dropdown menu -->
 			<div
-				class="fixed bottom-16 end-2 w-[80%] rounded-md bg-surface-white text-base p-5 space-y-4 shadow-md"
+				class="fixed bottom-16 end-2 w-[80%] space-y-4 rounded-md bg-surface-base p-5 text-base shadow-md"
 				v-if="showMenu"
 				ref="menu"
 			>
 				<div
 					v-for="link in otherLinks"
 					:key="link.label"
-					class="flex items-center gap-x-2 cursor-pointer"
+					class="flex cursor-pointer items-center gap-x-2"
 					@click="handleClick(link)"
 				>
 					<component
@@ -28,7 +31,7 @@
 			<!-- Fixed menu -->
 			<div
 				v-if="sidebarSettings.data"
-				class="fixed bottom-0 start-0 w-full flex items-center justify-around border-t border-outline-gray-2 bg-surface-white standalone:pb-4 z-10"
+				class="standalone:pb-4 fixed bottom-0 start-0 z-10 flex w-full items-center justify-around border-t border-outline-gray-2 bg-surface-base"
 			>
 				<button
 					v-for="tab in sidebarLinks"
@@ -62,6 +65,7 @@ import { sessionStore } from '@/stores/session'
 import { useSettings } from '@/stores/settings'
 import { usersStore } from '@/stores/user'
 import * as icons from 'lucide-vue-next'
+import { toggleNotifications } from '@/stores/notifications'
 
 const { logout, user } = sessionStore()
 let { isLoggedIn } = sessionStore()
@@ -204,7 +208,10 @@ let isActive = (tab) => {
 }
 
 const handleClick = (tab) => {
-	if (tab.label == 'Log in') window.location.href = '/login'
+	if (tab.label == 'Notifications') {
+		toggleNotifications()
+		toggleMenu()
+	} else if (tab.label == 'Log in') window.location.href = '/login'
 	else if (tab.label == 'Log out')
 		logout.submit().then(() => {
 			isLoggedIn = false
@@ -216,9 +223,7 @@ const handleClick = (tab) => {
 				username: userResource.data?.username,
 			},
 		})
-	else if (router.hasRoute(tab.to)) router.push({ name: tab.to })
-	else if (tab.to?.startsWith('http')) window.open(tab.to, '_blank')
-	else if (tab.to) window.location.href = `/${tab.to}`
+	else router.push({ name: tab.to })
 }
 
 const isVisible = (tab) => {

@@ -1,24 +1,21 @@
 <template>
-	<div>
-		<label v-if="label" class="block mb-1" :class="labelClasses">
-			{{ label }}
-			<span v-if="required" class="text-ink-red-3">*</span>
-		</label>
+	<div class="space-y-1.5">
+		<FormLabel v-if="label" :label="label" :required="required" />
 		<Combobox v-model="selectedValue" nullable v-slot="{ open }">
 			<div class="relative w-full">
 				<div
-					class="flex flex-wrap items-center gap-1.5 w-full rounded-lg border border-[--surface-gray-2] bg-surface-gray-2 px-2 py-1.5 cursor-text transition-colors focus-within:bg-surface-white focus-within:border-outline-gray-4 focus-within:shadow-sm focus-within:ring-0 focus-within:ring-2 focus-within:ring-outline-gray-3"
+					class="flex flex-wrap items-center gap-1.5 w-full rounded-lg border border-[--surface-gray-2] bg-surface-gray-2 px-2 py-1.5 cursor-text transition-colors hover:border-outline-elevation-2 hover:bg-surface-gray-3 focus-within:bg-surface-base focus-within:border-outline-gray-4 focus-within:shadow-sm focus-within:ring-0"
 					@click="focusInput"
 				>
 					<button
 						v-for="value in values"
 						:key="value"
 						type="button"
-						class="inline-flex items-center gap-1 bg-surface-white border border-outline-gray-2 text-ink-gray-7 ps-2 pe-1.5 py-0.5 rounded text-base leading-5"
+						class="inline-flex items-center gap-1 bg-surface-base border border-outline-gray-2 text-ink-gray-7 ps-2 pe-1.5 py-0.5 rounded text-base leading-5"
 						@click.stop="removeValue(value)"
 					>
 						<span>{{ value }}</span>
-						<X class="size-3.5 stroke-1.5 shrink-0" />
+						<span class="lucide-x size-3.5 shrink-0" />
 					</button>
 					<ComboboxInput
 						ref="search"
@@ -38,7 +35,7 @@
 				<ComboboxOptions
 					v-show="open"
 					static
-					class="absolute z-20 mt-1 w-full rounded-lg bg-surface-modal border-2 border-outline-gray-modals max-h-[13rem] flex flex-col"
+					class="absolute z-20 mt-1 w-full rounded-lg bg-surface-elevation-2 border-2 border-outline-elevation-2 max-h-[13rem] flex flex-col"
 				>
 					<div
 						class="flex-1 my-1 overflow-y-auto px-1.5"
@@ -58,7 +55,7 @@
 									]"
 								>
 									<div class="flex flex-col gap-1 p-1">
-										<div class="text-base font-medium text-ink-gray-8">
+										<div class="text-base-medium text-ink-gray-8">
 											{{
 												option.value === option.label
 													? option.description
@@ -80,7 +77,7 @@
 
 					<div
 						v-if="attrs.onCreate"
-						class="p-1 bg-surface-white border-t rounded-b-lg"
+						class="p-1 bg-surface-base border-t rounded-b-lg"
 					>
 						<Button
 							variant="ghost"
@@ -89,7 +86,7 @@
 							@click="attrs.onCreate()"
 						>
 							<template #prefix>
-								<Plus class="h-4 w-4 stroke-1.5" />
+								<span class="lucide-plus size-4" />
 							</template>
 						</Button>
 					</div>
@@ -99,7 +96,7 @@
 	</div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import {
 	Combobox,
 	ComboboxButton,
@@ -107,32 +104,43 @@ import {
 	ComboboxOptions,
 	ComboboxOption,
 } from '@headlessui/vue'
-import { createResource, Button, toast } from 'frappe-ui'
+import { createResource, Button, FormLabel, toast } from 'frappe-ui'
 import { ref, computed, useAttrs, watch } from 'vue'
 import { watchDebounced } from '@vueuse/core'
-import { X, Plus } from 'lucide-vue-next'
+import type { Resource } from '@/types/api'
 
-const props = defineProps({
-	label: String,
-	size: { type: String, default: 'sm' },
-	doctype: { type: String, required: true },
-	filters: { type: [Object, Array], default: () => ({}) },
-	url: { type: String, default: 'frappe.desk.search.search_link' },
-	searchParams: { type: Object, default: () => ({}) },
-	validate: Function,
-	errorMessage: {
-		type: Function,
-		default: (value) => `${value} is an Invalid value`,
-	},
-	required: Boolean,
-})
+interface SelectOption {
+	label: string
+	value: string
+	description?: string
+}
 
-const values = defineModel({ default: () => [] })
+const props = withDefaults(
+	defineProps<{
+		label?: string
+		size?: string
+		doctype: string
+		filters?: Record<string, unknown> | unknown[]
+		url?: string
+		searchParams?: Record<string, unknown>
+		validate?: (value: string) => boolean
+		errorMessage?: (value: string) => string
+		required?: boolean
+	}>(),
+	{
+		filters: () => ({}),
+		url: 'frappe.desk.search.search_link',
+		searchParams: () => ({}),
+		errorMessage: (value: string) => `${value} is an Invalid value`,
+	}
+)
+
+const values = defineModel<string[]>({ default: () => [] })
 const attrs = useAttrs()
-const trigger = ref(null)
-const query = ref('')
-const text = ref('')
-const selectedValue = ref(null)
+const trigger = ref<{ $el: HTMLElement } | null>(null)
+const query = ref<string>('')
+const text = ref<string>('')
+const selectedValue = ref<SelectOption | null>(null)
 
 watch(selectedValue, (val) => {
 	if (!val?.value) return
@@ -144,15 +152,14 @@ watch(selectedValue, (val) => {
 watchDebounced(
 	query,
 	(val) => {
-		val = val || ''
-		if (text.value === val) return
-		text.value = val
-		reload(val)
+		const v = val || ''
+		if (text.value === v) return
+		text.value = v
+		reload(v)
 	},
 	{ debounce: 300, immediate: true }
 )
 
-// Refetch when filters or searchParams change
 watch(
 	() => [props.filters, props.searchParams],
 	() => {
@@ -161,7 +168,7 @@ watch(
 	{ deep: true }
 )
 
-function getParams(txt) {
+function getParams(txt: string) {
 	return {
 		txt,
 		doctype: props.doctype,
@@ -173,14 +180,14 @@ function getParams(txt) {
 const filterOptions = createResource({
 	url: props.url,
 	method: 'POST',
-})
+}) as Resource<SelectOption[] | null>
 
-const options = computed(() => {
+const options = computed<SelectOption[]>(() => {
 	const allOptions = filterOptions.data || []
 	return allOptions.filter((option) => !values.value?.includes(option.value))
 })
 
-function reload(val) {
+function reload(val: string) {
 	filterOptions.update({
 		params: getParams(val),
 	})
@@ -194,15 +201,14 @@ function onFocus() {
 	trigger.value?.$el.click()
 }
 
-function addValue(value) {
+function addValue(value: string) {
 	if (!value) return
 
 	const splitValues = value.split(',')
-	let newValues = [...(values.value || [])]
+	const newValues = [...(values.value || [])]
 
-	splitValues.forEach((val) => {
-		val = val.trim()
-
+	splitValues.forEach((raw) => {
+		const val = raw.trim()
 		if (!val) return
 		if (newValues.includes(val)) return
 
@@ -217,12 +223,7 @@ function addValue(value) {
 	values.value = newValues
 }
 
-function removeValue(value) {
-	values.value = values.value.filter((v) => v !== value)
+function removeValue(value: string) {
+	values.value = (values.value || []).filter((v) => v !== value)
 }
-
-const labelClasses = computed(() => [
-	{ sm: 'text-xs', md: 'text-base' }[props.size || 'sm'],
-	'text-ink-gray-5',
-])
 </script>

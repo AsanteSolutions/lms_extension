@@ -1,13 +1,8 @@
 <template>
-	<Dialog
-		v-model="show"
-		:options="{
-			size: 'lg',
-		}"
-	>
+	<Dialog v-model:open="show" size="lg">
 		<template #body>
 			<div class="p-5 text-base">
-				<div class="text-lg text-ink-gray-9 font-semibold mb-5">
+				<div class="text-xl-semibold text-ink-gray-9 mb-5">
 					{{
 						assignmentID === 'new'
 							? __('Create an Assignment')
@@ -27,12 +22,6 @@
 						:label="__('Submission Type')"
 						:required="true"
 					/>
-					<FormControl
-						v-model="assignment.custom_due_date"
-						type="datetime-local"
-						:label="__('Due Date')"
-						:required="true"
-					/>
 					<Link
 						v-model="assignment.course"
 						:label="__('Course')"
@@ -40,16 +29,16 @@
 						placeholder=" "
 					/>
 					<div>
-						<div class="text-xs text-ink-gray-5 mb-2">
+						<div class="text-p-sm-medium text-ink-gray-7 mb-1.5">
 							{{ __('Question') }}
-							<span class="text-ink-red-3">*</span>
+							<span class="text-ink-red-6">*</span>
 						</div>
 						<TextEditor
 							:content="assignment.question"
 							@change="(val) => (assignment.question = val)"
 							:editable="true"
 							:fixedMenu="true"
-							editorClass="prose-sm max-w-none border-b border-x border-outline-gray-modals bg-surface-gray-2 rounded-b-md py-1 px-2 min-h-[10rem] max-h-[18rem] overflow-y-auto"
+							editorClass="prose-sm max-w-none border-b border-x border-outline-elevation-2 bg-surface-gray-2 rounded-b-md py-1 px-2 min-h-[10rem] max-h-[18rem] overflow-y-auto"
 						/>
 					</div>
 				</div>
@@ -89,7 +78,6 @@ interface Assignment {
 	type: string
 	question: string
 	course?: string
-	custom_due_date: string
 }
 
 interface Assignments {
@@ -105,7 +93,6 @@ const assignment = reactive({
 	type: '',
 	question: '',
 	course: '',
-	custom_due_date: '',
 })
 
 const props = defineProps({
@@ -125,7 +112,6 @@ watch(
 					assignment.type = row.type
 					assignment.question = row.question
 					assignment.course = row.course || ''
-					assignment.custom_due_date = row.custom_due_date
 				}
 			})
 		}
@@ -138,7 +124,6 @@ watch(show, (newVal) => {
 		assignment.title = ''
 		assignment.type = ''
 		assignment.question = ''
-		assignment.custom_due_date = ''
 	}
 })
 

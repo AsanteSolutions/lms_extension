@@ -1,24 +1,18 @@
 <template>
-	<div class="flex flex-col min-h-0 text-base">
-		<div class="flex items-center justify-between mb-5">
-			<div class="flex flex-col space-y-2">
-				<div class="text-xl font-semibold text-ink-gray-9">
-					{{ label }}
-				</div>
-				<div class="text-ink-gray-6 leading-5">
-					{{ __(description || '') }}
-				</div>
-			</div>
-			<div class="flex items-center gap-x-5">
-				<Button @click="openForm('new')">
-					<template #prefix>
-						<Plus class="h-3 w-3 stroke-1.5" />
-					</template>
-					{{ __('New') }}
-				</Button>
-			</div>
-		</div>
-		<div v-if="zoomAccounts.data?.length" class="overflow-y-auto">
+	<SettingsLayout
+		v-if="view === 'list'"
+		:title="label"
+		:description="__(description || '')"
+	>
+		<template #header-actions>
+			<Button variant="solid" @click="openForm('new')">
+				<template #prefix>
+					<span class="lucide-plus h-4 w-4" />
+				</template>
+				{{ __('New') }}
+			</Button>
+		</template>
+		<div v-if="zoomAccounts.data?.length">
 			<ListView
 				:columns="columns"
 				:rows="zoomAccounts.data"
@@ -81,7 +75,7 @@
 								variant="ghost"
 								@click="removeAccount(selections, unselectAll)"
 							>
-								<Trash2 class="h-4 w-4 stroke-1.5" />
+								<span class="lucide-trash-2 h-4 w-4" />
 							</Button>
 						</div>
 					</template>
@@ -92,14 +86,14 @@
 			v-else
 			name="Zoom Settings"
 			:description="__('Add one to get started.')"
-			:icon="Video"
+			icon="lucide-video"
 		/>
-	</div>
-	<ZoomAccountModal
-		v-if="showForm"
-		v-model="showForm"
-		v-model:zoomAccounts="zoomAccounts"
+	</SettingsLayout>
+	<ZoomAccountForm
+		v-else
 		:accountID="currentAccount"
+		v-model:zoomAccounts="zoomAccounts"
+		@updateStep="(step) => (view = step)"
 	/>
 </template>
 <script setup lang="ts">
@@ -119,12 +113,12 @@ import {
 	toast,
 } from 'frappe-ui'
 import { computed, onMounted, ref } from 'vue'
-import { Plus, Trash2, Video } from 'lucide-vue-next'
 import { cleanError } from '@/utils'
-import ZoomAccountModal from '@/components/Modals/ZoomAccountModal.vue'
+import ZoomAccountForm from '@/components/Settings/ZoomAccountForm.vue'
 import EmptyStateLayout from '@/components/Layouts/EmptyStateLayout.vue'
+import SettingsLayout from '@/components/Layouts/SettingsLayout.vue'
 
-const showForm = ref(false)
+const view = ref<'list' | 'form'>('list')
 const currentAccount = ref<string | null>(null)
 
 const props = defineProps<{
@@ -157,7 +151,7 @@ const fetchZoomAccounts = () => {
 
 const openForm = (accountID: string) => {
 	currentAccount.value = accountID
-	showForm.value = true
+	view.value = 'form'
 }
 
 const removeAccount = (selections: Set<string>, unselectAll: () => void) => {

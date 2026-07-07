@@ -1,8 +1,27 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { call } from 'frappe-ui'
 import { usersStore } from './stores/user'
 import { sessionStore } from './stores/session'
 import { useSettings } from './stores/settings'
 import { getLmsBasePath } from './utils/basePath'
+
+// Run the fresh-site-admin persona check at most once per app load.
+let personaChecked = false
+
+async function shouldCapturePersona() {
+	const captured = await call('frappe.client.get_single_value', {
+		doctype: 'LMS Settings',
+		field: 'persona_captured',
+	})
+	if (captured) return false
+	const courseCount = await call('frappe.client.get_count', {
+		doctype: 'LMS Course',
+		filters: {
+			title: ['not like', '%A guide to Frappe Learning%'],
+		},
+	})
+	return !courseCount
+}
 
 const routes = [
 	{
@@ -118,12 +137,6 @@ const routes = [
 		props: true,
 	},
 	{
-		path: '/courses/:courseName/learn/:chapterNumber-:lessonNumber/edit',
-		name: 'LessonForm',
-		component: () => import('@/pages/LessonForm.vue'),
-		props: true,
-	},
-	{
 		path: '/job-opening/:jobName/edit',
 		name: 'JobForm',
 		component: () => import('@/pages/JobForm.vue'),
@@ -133,11 +146,6 @@ const routes = [
 		path: '/certified-participants',
 		name: 'CertifiedParticipants',
 		component: () => import('@/pages/CertifiedParticipants.vue'),
-	},
-	{
-		path: '/notifications',
-		name: 'Notifications',
-		component: () => import('@/pages/Notifications.vue'),
 	},
 	{
 		path: '/quizzes',
@@ -225,11 +233,6 @@ const routes = [
 		props: true,
 	},
 	{
-		path: '/search',
-		name: 'Search',
-		component: () => import('@/pages/Search/Search.vue'),
-	},
-	{
 		path: '/data-import',
 		name: 'DataImportList',
 		component: () => import('@/pages/DataImport.vue'),
@@ -275,6 +278,24 @@ router.beforeEach(async (to, from, next) => {
 			return
 		}
 	}
+
+	if (
+		isLoggedIn &&
+		!personaChecked &&
+		to.name !== 'PersonaForm' &&
+		userResource.data?.is_system_manager &&
+		!userResource.data?.developer_mode
+	) {
+		personaChecked = true
+		try {
+			if (await shouldCapturePersona()) {
+				return next({ name: 'PersonaForm' })
+			}
+		} catch (_) {
+			// Fail open — a transient API error must not block navigation.
+		}
+	}
+
 	return next()
 })
 

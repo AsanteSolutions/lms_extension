@@ -1,47 +1,59 @@
 <template>
-	<header
-		class="sticky top-0 z-10 flex items-center justify-between border-b bg-surface-white px-3 py-2.5 sm:px-5"
-	>
-		<Breadcrumbs :items="breadcrumbs" />
-		<Button
-			v-if="!readOnlyMode"
-			variant="solid"
-			@click="
-				() => {
-					assignmentID = 'new'
-					showAssignmentForm = true
-				}
-			"
-		>
-			<template #prefix>
-				<Plus class="w-4 h-4" />
-			</template>
-			{{ __('Create') }}
-		</Button>
-	</header>
+	<LayoutHeader>
+		<template #left-header>
+			<Breadcrumbs :items="breadcrumbs" />
+		</template>
+		<template #right-header>
+			<Button
+				v-if="!readOnlyMode"
+				variant="solid"
+				@click="
+					() => {
+						assignmentID = 'new'
+						showAssignmentForm = true
+					}
+				"
+			>
+				<template #prefix>
+					<span class="lucide-plus size-4" />
+				</template>
+				{{ __('Create') }}
+			</Button>
+		</template>
+	</LayoutHeader>
 
-	<div class="py-5">
+	<div class="flex min-h-0 flex-1 flex-col pt-5">
 		<div
-			class="flex flex-col md:flex-row md:items-center space-y-4 md:space-y-0 justify-between mb-5 mx-5"
+			class="mx-5 mb-5 flex flex-col justify-between gap-y-4 sm:flex-row sm:items-center"
 		>
-			<div class="text-lg font-semibold text-ink-gray-9">
-				{{ __('{0} Assignments').format(assignments.data?.length) }}
+			<div class="text-xl-semibold text-ink-gray-9">
+				{{ __('{0} Assignments').format(totalAssignments.data || 0) }}
 			</div>
-			<div class="grid grid-cols-2 gap-5">
+			<div class="flex flex-col gap-3 sm:flex-row md:gap-5">
 				<FormControl
+					type="text"
 					v-model="titleFilter"
-					:placeholder="__('Search by Title')"
-				/>
-				<FormControl
+					:placeholder="__('Search')"
+				>
+					<template #prefix>
+						<span class="lucide-search size-4 text-ink-gray-5" />
+					</template>
+				</FormControl>
+				<Select
 					v-model="typeFilter"
-					type="select"
 					:options="assignmentTypes"
 					:placeholder="__('Type')"
 				/>
 			</div>
 		</div>
+		<SkeletonLoader
+			v-if="assignments.list.loading && !assignments.data"
+			variant="list"
+			:count="8"
+			class="px-5"
+		/>
 		<ListView
-			v-if="assignments.data?.length"
+			v-else-if="assignments.data?.length"
 			:columns="assignmentColumns"
 			:rows="assignments.data"
 			row-key="name"
@@ -54,11 +66,9 @@
 					showAssignmentForm = true
 				},
 			}"
-			class="h-[71vh] lg:h-[79vh] px-5"
+			class="flex-1 px-5"
 		>
-			<ListHeader
-				class="mb-2 grid items-center rounded bg-surface-white border-b rounded-none p-2"
-			>
+			<ListHeader class="mb-2 grid items-center rounded bg-surface-gray-2 p-2">
 				<ListHeaderItem :item="item" v-for="item in assignmentColumns">
 					<template #prefix="{ item }">
 						<FeatherIcon :name="item.icon?.toString()" class="h-4 w-4" />
@@ -74,11 +84,7 @@
 					<template #default="{ column, item }">
 						<ListRowItem :item="row[column.key]" :align="column.align">
 							<div v-if="column.key == 'show_answers'">
-								<FormControl
-									type="checkbox"
-									v-model="row[column.key]"
-									:disabled="true"
-								/>
+								<Checkbox v-model="row[column.key]" :disabled="true" />
 							</div>
 							<div
 								v-else-if="column.key == 'modified'"
@@ -100,25 +106,39 @@
 							variant="ghost"
 							@click="deleteAssignment(selections, unselectAll)"
 						>
-							<FeatherIcon name="trash-2" class="h-4 w-4 stroke-1.5" />
+							<span class="lucide-trash-2 h-4 w-4" />
 						</Button>
 					</div>
 				</template>
 			</ListSelectBanner>
 		</ListView>
-		<div v-else class="h-[53vh]">
-			<EmptyStateLayout name="Assignments" />
+		<div v-else class="flex-1">
+			<EmptyStateLayout name="Assignments" icon="lucide-clipboard-list" />
 		</div>
-		<div class="flex items-center justify-end gap-x-3 pt-3 border-t px-5">
-			<Button v-if="assignments.hasNextPage" @click="assignments.next()">
-				{{ __('Load More') }}
-			</Button>
-			<div v-if="assignments.hasNextPage" class="h-8 border-s"></div>
-			<div class="text-ink-gray-5">
-				{{ assignments.data?.length }} {{ __('of') }}
-				{{ totalAssignments.data }}
-			</div>
-		</div>
+		<ListFooter
+			v-model="pageLength"
+			class="border-t px-3 py-2 sm:px-5"
+			:options="{
+				rowCount: assignments.data?.length,
+				totalCount: totalAssignments.data,
+			}"
+		>
+			<template #right>
+				<div class="flex items-center">
+					<Button
+						v-if="assignments.hasNextPage"
+						:label="__('Load More')"
+						@click="assignments.next()"
+					/>
+					<div v-if="assignments.hasNextPage" class="mx-3 h-[80%] border-l" />
+					<div class="flex items-center gap-1 text-base text-ink-gray-5">
+						<div>{{ assignments.data?.length || 0 }}</div>
+						<div>{{ __('of') }}</div>
+						<div>{{ totalAssignments.data || 0 }}</div>
+					</div>
+				</div>
+			</template>
+		</ListFooter>
 	</div>
 	<AssignmentForm
 		v-model="showAssignmentForm"
@@ -130,27 +150,30 @@
 import {
 	Breadcrumbs,
 	Button,
-	call,
 	createListResource,
 	createResource,
-	FormControl,
 	ListView,
 	ListHeader,
 	ListHeaderItem,
 	ListRows,
 	ListRow,
 	ListRowItem,
+	ListFooter,
 	ListSelectBanner,
 	FeatherIcon,
 	toast,
 	usePageMeta,
+	FormControl,
+	Checkbox,
 } from 'frappe-ui'
+import Select from '@/components/Controls/Select.vue'
 import { computed, inject, onMounted, ref, watch } from 'vue'
-import { Plus } from 'lucide-vue-next'
 import { useRouter, useRoute } from 'vue-router'
 import { sessionStore } from '../stores/session'
 import AssignmentForm from '@/components/Modals/AssignmentForm.vue'
+import SkeletonLoader from '@/components/SkeletonLoader.vue'
 import EmptyStateLayout from '@/components/Layouts/EmptyStateLayout.vue'
+import LayoutHeader from '@/components/Layouts/LayoutHeader.vue'
 
 const user = inject('$user')
 const dayjs = inject('$dayjs')
@@ -209,7 +232,7 @@ const assignmentFilter = computed(() => {
 
 const assignments = createListResource({
 	doctype: 'LMS Assignment',
-	fields: ['name', 'title', 'type', 'modified', 'question', 'course', 'custom_due_date'],
+	fields: ['name', 'title', 'type', 'modified', 'question', 'course'],
 	orderBy: 'modified desc',
 	cache: ['assignments'],
 	transform(data) {
@@ -219,6 +242,14 @@ const assignments = createListResource({
 				modified: dayjs(row.modified).format('DD MMM YYYY'),
 			}
 		})
+	},
+})
+
+const pageLength = computed({
+	get: () => assignments.pageLength,
+	set: (value) => {
+		assignments.update({ pageLength: value })
+		assignments.reload()
 	},
 })
 

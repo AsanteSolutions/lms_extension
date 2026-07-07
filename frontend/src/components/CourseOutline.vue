@@ -1,171 +1,75 @@
 <template>
-	<div class="">
+	<div class="p-3 h-full">
 		<div
-			v-if="title && (outline.data?.length || allowEdit)"
+			v-if="!hideHeader && title && (outline.data?.length || allowEdit)"
 			class="flex items-center justify-between gap-x-2 mb-4 px-2"
 			:class="{
-				'sticky top-0 z-10 bg-surface-white border-b px-3 py-2.5 sm:px-5':
+				'sticky top-0 z-10 bg-surface-base border-b px-3 py-2.5 sm:px-5':
 					allowEdit,
 			}"
 		>
 			<div
-				class="font-semibold text-lg leading-5 text-ink-gray-9"
+				class="text-xl-semibold leading-5 text-ink-gray-9"
 				:class="{ 'font-medium text-p-base': allowEdit }"
 			>
 				{{ __(title) }}
 			</div>
 			<Button size="sm" v-if="allowEdit" @click="openChapterModal()">
 				<template #prefix>
-					<Plus class="size-4 stroke-1.5" />
+					<span class="lucide-plus size-4" />
 				</template>
 				{{ __('Add') }}
 			</Button>
 		</div>
 		<div
+			v-if="allowEdit && outline.data && !outline.data.length"
+			class="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center text-ink-gray-5 h-full"
+		>
+			<span class="lucide-book-open size-8" />
+			<div class="text-sm">{{ __('No chapters yet') }}</div>
+			<Button @click="openChapterModal()">
+				<template #prefix>
+					<span class="lucide-plus size-4" />
+				</template>
+				{{ __('Create chapter') }}
+			</Button>
+		</div>
+		<div
+			v-else
 			:class="{
 				'border-2 rounded-md py-2 px-2': showOutline && outline.data?.length,
 			}"
 		>
 			<Draggable
 				:list="outline.data"
-				:disabled="!allowEdit"
+				:disabled="!allowEdit || chapterRenaming"
 				item-key="name"
 				group="chapters"
 				@end="updateChapterOrder"
 			>
 				<template #item="{ element: chapter, index }">
 					<div class="chapter-item">
-						<Disclosure
-							v-slot="{ open }"
-							:key="chapter.name"
-							:defaultOpen="openChapterDetail(chapter.idx)"
-						>
-							<DisclosureButton
-								ref=""
-								class="flex items-center w-full p-2 group"
-							>
-								<ChevronRight
-									:class="{
-										'rotate-90': open,
-										'rtl:rotate-180': !open,
-										hidden: chapter.is_scorm_package,
-										open: index == 1,
-									}"
-									class="h-4 w-4 text-ink-gray-9 stroke-1 transform duration-200"
-								/>
-								<div
-									class="text-base text-start text-ink-gray-9 font-medium leading-5 ms-2"
-									@click="redirectToChapter(chapter)"
-								>
-									{{ chapter.title }}
-								</div>
-								<div class="flex ms-auto gap-x-4">
-									<Tooltip :text="__('Edit Chapter')" placement="bottom">
-										<FilePenLine
-											v-if="allowEdit"
-											@click.prevent="openChapterModal(chapter)"
-											class="h-4 w-4 text-ink-gray-9 invisible group-hover:visible"
-										/>
-									</Tooltip>
-									<Tooltip :text="__('Delete Chapter')" placement="bottom">
-										<Trash2
-											v-if="allowEdit"
-											@click.prevent="trashChapter(chapter.name)"
-											class="h-4 w-4 text-ink-red-3 invisible group-hover:visible"
-										/>
-									</Tooltip>
-								</div>
-								<Check
-									v-if="
-										chapter.is_scorm_package && isScormChapterComplete(chapter)
-									"
-									class="h-4 w-4 text-green-700"
-								/>
-							</DisclosureButton>
-							<DisclosurePanel v-if="!chapter.is_scorm_package">
-								<Draggable
-									v-if="!chapter.is_scorm_package"
-									:list="chapter.lessons"
-									:disabled="!allowEdit"
-									item-key="name"
-									group="items"
-									@end="updateOutline"
-									:data-chapter="chapter.name"
-								>
-									<template #item="{ element: lesson }">
-										<div
-											class="outline-lesson ps-8 py-2 pe-4 text-ink-gray-9"
-											:class="
-												isActiveLesson(lesson.number) ? 'bg-surface-gray-3' : ''
-											"
-										>
-											<router-link
-												:to="{
-													name: allowEdit ? 'LessonForm' : 'Lesson',
-													params: {
-														courseName: courseName,
-														chapterNumber: lesson.number.split('-')[0],
-														lessonNumber: lesson.number.split('-')[1],
-													},
-												}"
-											>
-												<div class="flex items-center text-sm leading-5 group">
-													<MonitorPlay
-														v-if="lesson.icon === 'icon-youtube'"
-														class="h-4 w-4 stroke-1 me-2"
-													/>
-													<HelpCircle
-														v-else-if="lesson.icon === 'icon-quiz'"
-														class="h-4 w-4 stroke-1 me-2"
-													/>
-													<NotebookPen
-														v-else-if="lesson.icon === 'icon-assignment'"
-														class="h-4 w-4 stroke-1 me-2"
-													/>
-													<SquareCode
-														v-else-if="lesson.icon === 'icon-code'"
-														class="h-4 w-4 stroke-1 me-2"
-													/>
-													<FileText
-														v-else-if="lesson.icon === 'icon-list'"
-														class="h-4 w-4 text-ink-gray-9 stroke-1 me-2"
-													/>
-													{{ lesson.title }}
-													<Trash2
-														v-if="allowEdit"
-														@click.prevent="
-															trashLesson(lesson.name, chapter.name)
-														"
-														class="h-4 w-4 text-ink-red-3 ms-auto invisible group-hover:visible"
-													/>
-													<Check
-														v-if="lesson.is_complete"
-														class="h-4 w-4 text-green-700 ms-2"
-													/>
-												</div>
-											</router-link>
-										</div>
-									</template>
-								</Draggable>
-								<div v-if="allowEdit" class="flex mt-2 mb-4 ps-8">
-									<router-link
-										v-if="!chapter.is_scorm_package"
-										:to="{
-											name: 'LessonForm',
-											params: {
-												courseName: courseName,
-												chapterNumber: chapter.idx,
-												lessonNumber: chapter.lessons.length + 1,
-											},
-										}"
-									>
-										<Button>
-											{{ __('Add Lesson') }}
-										</Button>
-									</router-link>
-								</div>
-							</DisclosurePanel>
-						</Disclosure>
+						<ChapterRow
+							:chapter="chapter"
+							:index="index"
+							:courseName="courseName"
+							:allowEdit="allowEdit"
+							:inlineSelect="inlineSelect"
+							:editorLinks="editorLinks"
+							:selectedLessonNumber="selectedLessonNumber"
+							:creatingLesson="creatingLessonChapter === chapter.name"
+							@select-lesson="(payload) => emit('select-lesson', payload)"
+							@edit-chapter="openChapterModal"
+							@rename-chapter="renameChapter"
+							@renaming-change="(v) => (chapterRenaming = v)"
+							@delete-chapter="trashChapter"
+							@delete-lesson="
+								({ lesson, chapter: chapterName }) =>
+									trashLesson(lesson, chapterName)
+							"
+							@move-lesson="updateOutline"
+							@create-lesson="createLessonInline"
+						/>
 					</div>
 				</template>
 			</Draggable>
@@ -174,83 +78,112 @@
 	<ChapterModal
 		v-if="user.data"
 		v-model="showChapterModal"
-		v-model:outline="outline"
 		:course="courseName"
-		:chapterDetail="getCurrentChapter()"
+		:chapterDetail="currentChapter"
+		@created="outline.reload()"
+		@updated="outline.reload()"
 	/>
 </template>
-<script setup>
-import { Button, createResource, Tooltip, toast } from 'frappe-ui'
-import { getCurrentInstance, inject, ref, watch } from 'vue'
+
+<script setup lang="ts">
+import { Button, createResource, toast } from 'frappe-ui'
+import { inject, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import Draggable from 'vuedraggable'
-import { Disclosure, DisclosureButton, DisclosurePanel } from '@headlessui/vue'
-import {
-	Check,
-	ChevronRight,
-	FileText,
-	FilePenLine,
-	HelpCircle,
-	MonitorPlay,
-	NotebookPen,
-	Plus,
-	SquareCode,
-	Trash2,
-} from 'lucide-vue-next'
-import { useRoute, useRouter } from 'vue-router'
+
 import ChapterModal from '@/components/Modals/ChapterModal.vue'
+import ChapterRow from '@/components/ChapterRow.vue'
+import type {
+	OutlineChapter,
+	OutlineLesson,
+	Resource,
+	SessionUser,
+} from '@/types/api'
 
-const route = useRoute()
+interface DraggableEvent {
+	item: { __draggable_context: { element: OutlineChapter | OutlineLesson } }
+	from: { dataset: { chapter: string } }
+	to: { dataset: { chapter: string } }
+	newIndex: number
+}
+
+interface DialogAction {
+	label: string
+	theme?: string
+	variant?: string
+	onClick: (close: () => void) => void
+}
+type DialogFn = (opts: {
+	title: string
+	message: string
+	actions: DialogAction[]
+}) => void
+
+import { getCurrentInstance } from 'vue'
+const user = inject<SessionUser>('$user')!
 const router = useRouter()
-const user = inject('$user')
-const showChapterModal = ref(false)
-const currentChapter = ref(null)
-const app = getCurrentInstance()
-const { $dialog } = app.appContext.config.globalProperties
+const showChapterModal = ref<boolean>(false)
+const currentChapter = ref<OutlineChapter | null>(null)
+// True while a ChapterRow is in inline-rename mode — locks chapter drag.
+const chapterRenaming = ref<boolean>(false)
+const { $dialog } = getCurrentInstance()!.appContext.config
+	.globalProperties as {
+	$dialog: DialogFn
+}
 
-const props = defineProps({
-	courseName: {
-		type: String,
-		required: true,
-	},
-	showOutline: {
-		type: Boolean,
-		default: false,
-	},
-	title: {
-		type: String,
-		default: '',
-	},
-	allowEdit: {
-		type: Boolean,
-		default: false,
-	},
-	getProgress: {
-		type: Boolean,
-		default: false,
-	},
-	completedLesson: {
-		type: String,
-		default: null,
-	},
-})
+const emit = defineEmits<{
+	'select-lesson': [{ chapterNumber: string; lessonNumber: string }]
+	// Keyed delete signals so the parent can match the open lesson precisely. The
+	// name is carried per emit (no shared slot), so concurrent deletes can't name
+	// the wrong doc and an unrelated reload can't consume the signal.
+	'lesson-deleted': [{ lesson: string }]
+	'chapter-deleted': [{ chapter: string }]
+}>()
+
+// The lesson currently being named inline (its docname), and the chapter whose
+// "Add Lesson" button is mid-create (for the button spinner).
+const creatingLessonChapter = ref<string>('')
+
+const props = withDefaults(
+	defineProps<{
+		courseName: string
+		showOutline?: boolean
+		title?: string
+		allowEdit?: boolean
+		getProgress?: boolean
+		completedLesson?: string | null
+		inlineSelect?: boolean
+		editorLinks?: boolean
+		selectedLessonNumber?: string
+		hideHeader?: boolean
+	}>(),
+	{
+		showOutline: false,
+		title: '',
+		allowEdit: false,
+		getProgress: false,
+		inlineSelect: false,
+		editorLinks: false,
+		selectedLessonNumber: '',
+		completedLesson: null,
+		hideHeader: false,
+	}
+)
+
+defineExpose({ openChapterModal })
 
 const outline = createResource({
 	url: 'lms.lms.utils.get_course_outline',
 	cache: ['course_outline', props.courseName],
 	makeParams() {
-		return {
-			course: props.courseName,
-			progress: props.getProgress,
-		}
+		return { course: props.courseName, progress: props.getProgress }
 	},
 	auto: true,
-})
+}) as Resource<OutlineChapter[] | null>
 
 watch(
 	() => props.courseName,
-	() => {
-		outline.reload()
-	}
+	() => outline.reload()
 )
 
 watch(
@@ -269,11 +202,8 @@ watch(
 
 const deleteLesson = createResource({
 	url: 'lms.lms.api.delete_lesson',
-	makeParams(values) {
-		return {
-			lesson: values.lesson,
-			chapter: values.chapter,
-		}
+	makeParams(values: { lesson: string; chapter: string }) {
+		return values
 	},
 	onSuccess() {
 		outline.reload()
@@ -283,34 +213,124 @@ const deleteLesson = createResource({
 
 const updateLessonIndex = createResource({
 	url: 'lms.lms.api.update_lesson_index',
-	makeParams(values) {
-		return {
-			lesson: values.lesson,
-			sourceChapter: values.sourceChapter,
-			targetChapter: values.targetChapter,
-			idx: values.idx,
-		}
+	makeParams(values: {
+		lesson: string
+		sourceChapter: string
+		targetChapter: string
+		idx: number
+	}) {
+		return values
 	},
 	onSuccess() {
+		outline.reload()
 		toast.success(__('Lesson moved successfully'))
 	},
 })
 
 const updateChapterIndex = createResource({
 	url: 'lms.lms.api.update_chapter_index',
-	makeParams(values) {
-		return {
-			chapter: values.chapter,
-			course: values.course,
-			idx: values.idx,
-		}
+	makeParams(values: { chapter: string; course: string; idx: number }) {
+		return values
 	},
 	onSuccess() {
+		outline.reload()
 		toast.success(__('Chapter moved successfully'))
 	},
 })
 
-const trashLesson = (lessonName, chapterName) => {
+const deleteChapter = createResource({
+	url: 'lms.lms.api.delete_chapter',
+	makeParams(values: { chapter: string }) {
+		return values
+	},
+	onSuccess() {
+		outline.reload()
+		toast.success(__('Chapter deleted successfully'))
+	},
+})
+
+const renameChapterResource = createResource({
+	url: 'lms.lms.api.upsert_chapter',
+	makeParams(values: { chapter: OutlineChapter; title: string }) {
+		return {
+			name: values.chapter.name,
+			title: values.title,
+			course: props.courseName,
+			is_scorm_package: values.chapter.is_scorm_package ?? 0,
+			scorm_package: values.chapter.scorm_package ?? null,
+		}
+	},
+	onSuccess() {
+		outline.reload()
+		toast.success(__('Chapter renamed successfully'))
+	},
+	onError(err: { messages?: string[] } | string) {
+		outline.reload()
+		toast.error(typeof err === 'string' ? err : err.messages?.[0] ?? 'Error')
+	},
+})
+
+function renameChapter(payload: { chapter: OutlineChapter; title: string }) {
+	renameChapterResource.submit(payload)
+}
+
+const errorMessage = (err: { messages?: string[] } | string): string =>
+	typeof err === 'string' ? err : err.messages?.[0] ?? 'Error'
+
+// Inserts the Course Lesson and its chapter reference in one request, so a
+// failure on either rolls back atomically — no orphaned lesson. Returns the
+// new lesson's docname.
+const addLesson = createResource({
+	url: 'lms.lms.api.create_lesson',
+	makeParams(values: { chapter: string }) {
+		return { chapter: values.chapter }
+	},
+})
+
+// Create the lesson immediately as "Untitled lesson", then open it in the
+// editor so the title is edited inline on the lesson itself.
+function createLessonInline(payload: {
+	chapter: OutlineChapter
+	lessonIdx: number
+}) {
+	creatingLessonChapter.value = payload.chapter.name
+	addLesson.submit(
+		{ chapter: payload.chapter.name },
+		{
+			onSuccess(lessonName: string) {
+				creatingLessonChapter.value = ''
+				outline.reload().then(() => {
+					const created = (outline.data ?? [])
+						.flatMap((c) => c.lessons ?? [])
+						.find((l) => l.name === lessonName)
+					if (created) navigateToLesson(created)
+				})
+			},
+			onError(err: { messages?: string[] } | string) {
+				creatingLessonChapter.value = ''
+				toast.error(errorMessage(err))
+			},
+		}
+	)
+}
+
+function navigateToLesson(lesson: OutlineLesson) {
+	const [chapterNumber, lessonNumber] = lesson.number.split('-')
+	if (props.inlineSelect) {
+		emit('select-lesson', { chapterNumber, lessonNumber })
+		return
+	}
+	if (props.editorLinks) {
+		router.push({
+			name: 'CourseDetail',
+			params: { courseName: props.courseName },
+			hash: '#course editor',
+			query: { editLesson: lesson.number, lessonMode: 'edit' },
+		})
+	}
+}
+
+function trashLesson(lessonName: string, chapterName: string) {
 	$dialog({
 		title: __('Delete this lesson?'),
 		message: __(
@@ -322,10 +342,13 @@ const trashLesson = (lessonName, chapterName) => {
 				theme: 'red',
 				variant: 'solid',
 				onClick(close) {
-					deleteLesson.submit({
-						lesson: lessonName,
-						chapter: chapterName,
-					})
+					// Per-call onSuccess closes over this lessonName, so the editor is
+					// told exactly which lesson went — no shared slot to drift on
+					// concurrent deletes. Runs alongside the resource-level reload.
+					deleteLesson.submit(
+						{ lesson: lessonName, chapter: chapterName },
+						{ onSuccess: () => emit('lesson-deleted', { lesson: lessonName }) }
+					)
 					close()
 				},
 			},
@@ -333,51 +356,7 @@ const trashLesson = (lessonName, chapterName) => {
 	})
 }
 
-const openChapterDetail = (index) => {
-	const activeChapter = route.params.chapterNumber
-	return activeChapter ? index == activeChapter : index == 1
-}
-
-const openChapterModal = (chapter = null) => {
-	currentChapter.value = chapter
-	showChapterModal.value = true
-}
-
-const getCurrentChapter = () => {
-	return currentChapter.value
-}
-
-const updateOutline = (e) => {
-	updateLessonIndex.submit({
-		lesson: e.item.__draggable_context.element.name,
-		sourceChapter: e.from.dataset.chapter,
-		targetChapter: e.to.dataset.chapter,
-		idx: e.newIndex,
-	})
-}
-
-const updateChapterOrder = (e) => {
-	updateChapterIndex.submit({
-		chapter: e.item.__draggable_context.element.name,
-		course: props.courseName,
-		idx: e.newIndex,
-	})
-}
-
-const deleteChapter = createResource({
-	url: 'lms.lms.api.delete_chapter',
-	makeParams(values) {
-		return {
-			chapter: values.chapter,
-		}
-	},
-	onSuccess() {
-		outline.reload()
-		toast.success(__('Chapter deleted successfully'))
-	},
-})
-
-const trashChapter = (chapterName) => {
+function trashChapter(chapterName: string) {
 	$dialog({
 		title: __('Delete this chapter?'),
 		message: __(
@@ -389,7 +368,13 @@ const trashChapter = (chapterName) => {
 				theme: 'red',
 				variant: 'solid',
 				onClick(close) {
-					deleteChapter.submit({ chapter: chapterName })
+					deleteChapter.submit(
+						{ chapter: chapterName },
+						{
+							onSuccess: () =>
+								emit('chapter-deleted', { chapter: chapterName }),
+						}
+					)
 					close()
 				},
 			},
@@ -397,32 +382,25 @@ const trashChapter = (chapterName) => {
 	})
 }
 
-const redirectToChapter = (chapter) => {
-	if (!chapter.is_scorm_package) return
-	event.preventDefault()
-	if (props.allowEdit) return
-	if (!user.data) {
-		toast.success(__('Please enroll for this course to view this lesson'))
-		return
-	}
+function openChapterModal(chapter: OutlineChapter | null = null) {
+	currentChapter.value = chapter
+	showChapterModal.value = true
+}
 
-	router.push({
-		name: 'SCORMChapter',
-		params: {
-			courseName: props.courseName,
-			chapterName: chapter.name,
-		},
+function updateOutline(e: DraggableEvent) {
+	updateLessonIndex.submit({
+		lesson: e.item.__draggable_context.element.name,
+		sourceChapter: e.from.dataset.chapter,
+		targetChapter: e.to.dataset.chapter,
+		idx: e.newIndex,
 	})
 }
 
-const isScormChapterComplete = (chapter) => {
-	return chapter.lessons?.length && chapter.lessons.every((l) => l.is_complete)
-}
-
-const isActiveLesson = (lessonNumber) => {
-	return (
-		route.params.chapterNumber == lessonNumber.split('-')[0] &&
-		route.params.lessonNumber == lessonNumber.split('-')[1]
-	)
+function updateChapterOrder(e: DraggableEvent) {
+	updateChapterIndex.submit({
+		chapter: e.item.__draggable_context.element.name,
+		course: props.courseName,
+		idx: e.newIndex,
+	})
 }
 </script>

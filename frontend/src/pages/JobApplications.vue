@@ -1,20 +1,20 @@
 <template>
 	<div class="">
-		<header
-			class="sticky top-0 z-10 flex items-center justify-between border-b bg-surface-white px-3 py-2.5 sm:px-5"
-		>
-			<Breadcrumbs
-				class="h-7"
-				:items="[
-					{ label: __('Jobs'), route: { name: 'Jobs' } },
-					{
-						label: applications.data?.[0]?.job_title,
-						route: { name: 'JobDetail', params: { job: props.job } },
-					},
-					{ label: __('Applications') },
-				]"
-			/>
-		</header>
+		<LayoutHeader>
+			<template #left-header>
+				<Breadcrumbs
+					class="h-7"
+					:items="[
+						{ label: __('Jobs'), route: { name: 'Jobs' } },
+						{
+							label: applications.data?.[0]?.job_title,
+							route: { name: 'JobDetail', params: { job: props.job } },
+						},
+						{ label: __('Applications') },
+					]"
+				/>
+			</template>
+		</LayoutHeader>
 		<div class="mx-auto pt-5 p-4">
 			<div class="flex items-center justify-between mb-5">
 				<div class="text-lg font-semibold text-ink-gray-9 mb-4 md:mb-0">
@@ -27,7 +27,7 @@
 				</div>
 				<FormControl v-model="search" type="text" placeholder="Search">
 					<template #prefix>
-						<FeatherIcon name="search" class="size-4 text-ink-gray-5" />
+						<span class="lucide-search size-4 text-ink-gray-5" />
 					</template>
 				</FormControl>
 			</div>
@@ -44,7 +44,7 @@
 					class="h-[79vh] border-b"
 				>
 					<ListHeader
-						class="mb-2 grid items-center rounded bg-surface-white border-b rounded-none p-2"
+						class="mb-2 grid items-center rounded bg-surface-gray-2 p-2"
 					>
 						<ListHeaderItem
 							:item="item"
@@ -83,7 +83,7 @@
 								<div v-else-if="column.key === 'actions'">
 									<Dropdown :options="getActionOptions(row)">
 										<Button variant="ghost">
-											<FeatherIcon name="more-horizontal" class="w-4 h-4" />
+											<span class="lucide-more-horizontal size-4" />
 										</Button>
 									</Dropdown>
 								</div>
@@ -111,10 +111,9 @@
 					</div>
 				</div>
 			</div>
-			<EmptyStateLayout
-				v-else-if="!applications.loading"
-				name="Job Applications"
-			/>
+			<div v-else-if="!applications.loading" class="flex-1">
+				<EmptyStateLayout name="Job Applications" icon="lucide-briefcase" />
+			</div>
 		</div>
 
 		<Dialog
@@ -153,7 +152,7 @@
 							@change="(val) => (emailForm.message = val)"
 							:editable="true"
 							:fixedMenu="true"
-							editorClass="prose-sm max-w-none border-b border-x border-outline-gray-modals bg-surface-gray-2 rounded-b-md py-1 px-2 min-h-[7rem]"
+							editorClass="prose-sm max-w-none border-b border-x border-outline-elevation-2 bg-surface-gray-2 rounded-b-md py-1 px-2 min-h-[7rem]"
 						/>
 					</div>
 				</div>
@@ -187,6 +186,7 @@ import {
 import { computed, inject, ref, reactive, watch } from 'vue'
 import { sessionStore } from '../stores/session'
 import EmptyStateLayout from '@/components/Layouts/EmptyStateLayout.vue'
+import LayoutHeader from '@/components/Layouts/LayoutHeader.vue'
 
 const dayjs = inject('$dayjs')
 const { brand } = sessionStore()
@@ -208,20 +208,26 @@ const props = defineProps({
 
 const applications = createListResource({
 	doctype: 'LMS Job Application',
-	fields: [
-		'name',
-		'user.user_image as user_image',
-		'user.full_name as full_name',
-		'user.email as email',
-		'creation',
-		'resume',
-		'job.job_title as job_title',
-	],
+	fields: ['name', 'user', 'creation', 'resume', 'job_title'],
 	filters: {
 		job: props.job,
 	},
 	auto: true,
 })
+
+const users = createResource({
+	url: 'lms.lms.api.get_application_users',
+	makeParams: () => ({
+		user_names: (applications.data || []).map((a) => a.user),
+	}),
+})
+
+watch(
+	() => applications.data,
+	(rows) => {
+		if (rows?.length) users.submit()
+	}
+)
 
 const totalApplications = createResource({
 	url: 'frappe.client.get_count',
@@ -353,11 +359,17 @@ const applicationColumns = computed(() => {
 
 const applicantRows = computed(() => {
 	if (!applications.data) return []
-	return applications.data.map((application) => ({
-		...application,
-		full_name: application.full_name,
-		applied_on: dayjs(application.creation).format('DD MMM YYYY'),
-	}))
+	const userMap = Object.fromEntries((users.data || []).map((u) => [u.name, u]))
+	return applications.data.map((application) => {
+		const user = userMap[application.user] || {}
+		return {
+			...application,
+			user_image: user.user_image,
+			full_name: user.full_name,
+			email: user.email,
+			applied_on: dayjs(application.creation).format('DD MMM YYYY'),
+		}
+	})
 })
 
 usePageMeta(() => {

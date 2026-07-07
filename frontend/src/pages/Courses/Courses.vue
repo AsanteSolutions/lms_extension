@@ -1,63 +1,66 @@
 <template>
-	<header
-		class="sticky flex items-center justify-between top-0 z-10 border-b bg-surface-white px-3 py-2.5 sm:px-5"
-	>
-		<Breadcrumbs :items="breadcrumbs" />
-
-		<Dropdown
-			placement="right"
-			side="bottom"
-			v-if="canCreateCourse()"
-			:options="courseMenu"
-		>
-			<template v-slot="{ open }">
-				<Button variant="solid">
-					<template #prefix>
-						<Plus class="h-4 w-4 stroke-1.5" />
-					</template>
-					{{ __('Create') }}
-					<template #suffix>
-						<ChevronDown
-							:class="[
-								'w-4 h-4 stroke-1.5 ms-1 transform transition-transform',
-								open ? 'rotate-180' : '',
-							]"
-						/>
-					</template>
-				</Button>
-			</template>
-		</Dropdown>
-	</header>
-	<div class="p-5 pb-10">
+	<LayoutHeader>
+		<template #left-header>
+			<Breadcrumbs :items="breadcrumbs" />
+		</template>
+		<template #right-header>
+			<Dropdown
+				placement="right"
+				side="bottom"
+				v-if="canCreateCourse()"
+				:options="courseMenu"
+			>
+				<template v-slot="{ open }">
+					<Button variant="solid">
+						<template #prefix>
+							<span class="lucide-plus size-4" />
+						</template>
+						{{ __('Create') }}
+						<template #suffix>
+							<span
+								:class="[
+									'lucide-chevron-down ms-1 size-4 transform transition-transform',
+									open ? 'rotate-180' : '',
+								]"
+							/>
+						</template>
+					</Button>
+				</template>
+			</Dropdown>
+		</template>
+	</LayoutHeader>
+	<div class="flex min-h-0 flex-1 flex-col p-5 pb-10">
 		<div
-			class="flex flex-col lg:flex-row space-y-4 lg:space-y-0 lg:items-center justify-between mb-5"
+			class="mb-5 flex flex-col justify-between space-y-4 lg:flex-row lg:items-center lg:space-y-0"
 		>
-			<div class="text-lg text-ink-gray-9 font-semibold">
+			<div class="text-xl-semibold text-ink-gray-9">
 				{{ __('All Courses') }}
 			</div>
 			<div
-				class="flex flex-col space-y-3 lg:space-y-0 lg:flex-row lg:items-center lg:gap-x-4"
+				class="flex flex-col space-y-4 lg:flex-row lg:items-center lg:gap-x-4 lg:space-y-0"
 			>
 				<TabButtons :buttons="courseTabs" v-model="currentTab" class="w-fit" />
 
-				<div class="grid grid-cols-2 gap-2">
-					<FormControl
-						v-model="title"
-						:placeholder="__('Search')"
-						type="text"
-						class="w-full lg:min-w-0 lg:w-32 xl:w-40"
-						@input="updateCourses()"
-					/>
-					<div class="w-full lg:min-w-0 lg:w-32 xl:w-40">
-						<Select
-							v-if="categories.length"
-							v-model="currentCategory"
-							:options="categories"
-							:placeholder="__('Category')"
-							@update:modelValue="updateCourses()"
-						/>
-					</div>
-				</div>
+				<FormControl
+					v-model="title"
+					:placeholder="__('Search')"
+					type="text"
+					class="w-full lg:w-40"
+					@input="updateCourses()"
+				>
+					<template #prefix>
+						<span class="lucide-search size-4 text-ink-gray-5" />
+					</template>
+				</FormControl>
+
+				<ClearableCombobox
+					v-if="categories.data?.length"
+					v-model="currentCategory"
+					:options="categories.data.filter((c) => c.value)"
+					:placeholder="__('Category')"
+					@update:modelValue="updateCourses()"
+					class="w-full lg:w-40"
+				/>
 
 				<Tooltip :text="__('Only show courses that offer a certificate')">
 					<FormControl
@@ -69,9 +72,14 @@
 				</Tooltip>
 			</div>
 		</div>
+		<SkeletonLoader
+			v-if="courses.list.loading && !courses.data"
+			variant="cards"
+			:count="8"
+		/>
 		<div
-			v-if="courses.data?.length"
-			class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-8"
+			v-else-if="courses.data?.length"
+			class="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"
 		>
 			<router-link
 				v-for="course in courses.data"
@@ -80,7 +88,9 @@
 				<CourseCard :course="course" />
 			</router-link>
 		</div>
-		<EmptyStateLayout v-else-if="!courses.list.loading" name="Courses" />
+		<div v-else-if="!courses.list.loading" class="flex-1">
+			<EmptyStateLayout name="Courses" icon="lucide-book-open" />
+		</div>
 		<div
 			v-if="!courses.list.loading && courses.hasNextPage"
 			class="flex justify-center mt-5"
@@ -109,17 +119,18 @@ import {
 	createListResource,
 	Dropdown,
 	FormControl,
-	Select,
 	TabButtons,
 	Tooltip,
 	usePageMeta,
 } from 'frappe-ui'
+import ClearableCombobox from '@/components/Controls/ClearableCombobox.vue'
 import { computed, inject, onMounted, ref, watch } from 'vue'
-import { ChevronDown, Plus } from 'lucide-vue-next'
 import { sessionStore } from '@/stores/session'
 import { canCreateCourse } from '@/utils'
 import CourseCard from '@/components/CourseCard.vue'
+import SkeletonLoader from '@/components/SkeletonLoader.vue'
 import EmptyStateLayout from '@/components/Layouts/EmptyStateLayout.vue'
+import LayoutHeader from '@/components/Layouts/LayoutHeader.vue'
 import { useRouter } from 'vue-router'
 import NewCourseModal from '@/pages/Courses/NewCourseModal.vue'
 import CourseImportModal from '@/pages/Courses/CourseImportModal.vue'
@@ -128,17 +139,11 @@ const user = inject('$user')
 const dayjs = inject('$dayjs')
 const start = ref(0)
 const pageLength = ref(30)
-const categories = ref([
-	{
-		label: '',
-		value: null,
-	},
-])
 const currentCategory = ref(null)
 const title = ref('')
 const certification = ref(false)
 const filters = ref({})
-const currentTab = user.data?.is_student ? ref('enrolled') : ref('live')
+const currentTab = ref('live')
 const { brand } = sessionStore()
 const courseCount = ref(0)
 const router = useRouter()
@@ -156,6 +161,8 @@ const setFiltersFromQuery = () => {
 	title.value = queries.get('title') || ''
 	currentCategory.value = queries.get('category') || null
 	certification.value = queries.get('certification') || false
+	const tab = queries.get('tab')
+	if (tab) currentTab.value = tab
 	if (queries.get('newCourse') == '1') {
 		showCourseModal.value = true
 	}
@@ -167,26 +174,14 @@ const courses = createListResource({
 	cache: ['courses', user.data?.name],
 	pageLength: pageLength.value,
 	start: start.value,
-	transform(data) {
-		if(user.data?.is_instructor && (!user.data?.is_system_manager && !user.data?.is_moderator && !user.data?.is_evaluator)) {
-			return data.filter((element) => {
-				return element.instructors.some((instructor) => instructor.name === user.data?.name)
-			})
-		}
-
-		return data
-	},
 })
 
-const setCategories = (data) => {
-	let allCategories = data.map((course) => course.category)
-	allCategories = allCategories.filter(
-		(category, index) => allCategories.indexOf(category) === index && category
-	)
-	if (categories.value.length <= allCategories.length) {
-		updateCategories(data)
-	}
-}
+const categories = createListResource({
+	doctype: 'LMS Category',
+	url: 'lms.lms.utils.get_course_categories',
+	cache: ['course_categories'],
+	auto: true,
+})
 
 const getCourseCount = () => {
 	if (!user.data) return
@@ -203,9 +198,7 @@ const updateCourses = () => {
 	courses.update({
 		filters: filters.value,
 	})
-	courses.reload().then((data) => {
-		setCategories(data)
-	})
+	courses.reload()
 }
 
 const updateFilters = () => {
@@ -304,42 +297,26 @@ const setQueryParams = () => {
 	history.replaceState({}, '', `${location.pathname}${queryString}`)
 }
 
-const updateCategories = (data) => {
-	data.forEach((course) => {
-		if (
-			course.category &&
-			!categories.value.find((category) => category.value === course.category)
-		)
-			categories.value.push({
-				label: course.category,
-				value: course.category,
-			})
-	})
-}
-
 watch(currentTab, () => {
 	updateCourses()
 })
 
 const courseTabs = computed(() => {
-	let tabs = []
+	let tabs = [
+		{
+			label: __('Published'),
+			value: 'live',
+		},
+		{
+			label: __('Upcoming'),
+			value: 'upcoming',
+		},
+	]
 	if (
 		user.data?.is_moderator ||
 		user.data?.is_instructor ||
 		user.data?.is_evaluator
 	) {
-		tabs.push({
-			label: __('Live'),
-			value: 'live',
-		})
-		tabs.push({
-			label: __('New'),
-			value: 'new',
-		})
-		tabs.push({
-			label: __('Upcoming'),
-			value: 'upcoming',
-		})
 		tabs.push({ label: __('Created'), value: 'created' })
 		tabs.push({ label: __('Unpublished'), value: 'unpublished' })
 	} else if (user.data) {
