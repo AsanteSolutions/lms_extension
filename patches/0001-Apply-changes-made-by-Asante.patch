@@ -1,0 +1,284 @@
+From 12c9b13b5bf5470e5d0ab2095731470331b9adbd Mon Sep 17 00:00:00 2001
+From: Apile Tyumre <apile@asantesolutions.co.za>
+Date: Tue, 25 Aug 2026 12:57:40 +0200
+Subject: [PATCH] Apply changes made by Asante
+
+---
+ frontend/package.json                         |  4 +-
+ frontend/src/components/Assignment.vue        | 18 ++++++--
+ .../src/components/Layouts/MobileLayout.vue   |  4 +-
+ .../src/components/Modals/AssignmentForm.vue  | 10 +++++
+ frontend/src/pages/Assignments.vue            | 10 ++++-
+ frontend/src/pages/Courses/Courses.vue        | 41 ++++++++++++++-----
+ frontend/src/utils/index.js                   |  5 +++
+ frontend/vite.config.js                       |  4 +-
+ 8 files changed, 75 insertions(+), 21 deletions(-)
+
+diff --git a/frontend/package.json b/frontend/package.json
+index 4c873da..708e5d2 100644
+--- a/frontend/package.json
++++ b/frontend/package.json
+@@ -6,8 +6,8 @@
+   "scripts": {
+     "dev": "vite",
+     "serve": "vite preview",
+-    "build": "vite build --base=/assets/lms/frontend/ && yarn copy-html-entry",
+-    "copy-html-entry": "cp ../lms/public/frontend/index.html ../lms/www/_lms.html",
++    "build": "vite build --base=/assets/lms_extension/frontend/ && yarn copy-html-entry",
++    "copy-html-entry": "cp ../lms_extension/public/frontend/index.html ../lms_extension/www/_lms.html",
+     "test": "vitest run",
+     "test:watch": "vitest"
+   },
+diff --git a/frontend/src/components/Assignment.vue b/frontend/src/components/Assignment.vue
+index dec99bb..6270b6f 100644
+--- a/frontend/src/components/Assignment.vue
++++ b/frontend/src/components/Assignment.vue
+@@ -71,7 +71,11 @@
+ 							"Once the moderator grades your submission, you'll find the details here."
+ 						)
+ 					}}
+-					{{ __('Feel free to make edits to your submission if needed.') }}
++					<div
++						v-if="Date.parse(assignment.data?.custom_due_date) > Date.now()"
++					>
++						{{ __('Feel free to make edits to your submission if needed.') }}
++					</div>
+ 				</div>
+ 				<div v-if="showUploader()" class="border rounded-lg p-3">
+ 					<div class="font-semibold mb-2">
+@@ -83,7 +87,10 @@
+ 						}}
+ 					</div>
+ 					<FileUploader
+-						v-if="!attachment"
++						v-if="
++							!attachment &&
++							Date.parse(assignment.data?.custom_due_date) > Date.now()
++						"
+ 						:fileTypes="getType()"
+ 						:uploadArgs="{
+ 							private: true,
+@@ -138,9 +145,10 @@
+ 						v-model="answer"
+ 						type="text"
+ 						:aria-label="__('Enter a URL')"
++						:readonly="!canModifyAssignment"
+ 					/>
+ 				</div>
+-				<div v-else>
++				<div v-else-if="assignment.data.type == 'Text'">
+ 					<div class="text-sm mb-2 text-ink-gray-7">
+ 						{{ __('Write your answer here') }}
+ 					</div>
+@@ -440,11 +448,13 @@ const canGradeSubmission = computed(() => {
+ })
+ 
+ const canModifyAssignment = computed(() => {
++	const duedate = Date.parse(assignment.data?.custom_due_date)
+ 	if (props.submissionName == 'new') {
+ 		return true
+ 	} else if (
+ 		submissionResource.doc?.owner == user.data?.name &&
+-		submissionResource.doc?.status == 'Not Graded'
++		submissionResource.doc?.status == 'Not Graded' &&
++		duedate > Date.now()
+ 	) {
+ 		return true
+ 	}
+diff --git a/frontend/src/components/Layouts/MobileLayout.vue b/frontend/src/components/Layouts/MobileLayout.vue
+index 1815e38..671ceb9 100644
+--- a/frontend/src/components/Layouts/MobileLayout.vue
++++ b/frontend/src/components/Layouts/MobileLayout.vue
+@@ -243,7 +243,9 @@ const handleClick = (tab) => {
+ 				username: userResource.data?.username,
+ 			},
+ 		})
+-	else router.push({ name: tab.to })
++	else if (router.hasRoute(tab.to)) router.push({ name: tab.to })
++	else if (tab.to?.startsWith('http')) window.open(tab.to, '_blank')
++	else if (tab.to) window.location.href = `/${tab.to}`
+ }
+ 
+ const isVisible = (tab) => {
+diff --git a/frontend/src/components/Modals/AssignmentForm.vue b/frontend/src/components/Modals/AssignmentForm.vue
+index 43cf486..6683900 100644
+--- a/frontend/src/components/Modals/AssignmentForm.vue
++++ b/frontend/src/components/Modals/AssignmentForm.vue
+@@ -22,6 +22,12 @@
+ 						:label="__('Submission Type')"
+ 						:required="true"
+ 					/>
++					<FormControl
++						v-model="assignment.custom_due_date"
++						type="datetime-local"
++						:label="__('Due Date')"
++						:required="true"
++					/>
+ 					<Link
+ 						v-model="assignment.course"
+ 						:label="__('Course')"
+@@ -79,6 +85,7 @@ interface Assignment {
+ 	type: string
+ 	question: string
+ 	course?: string
++	custom_due_date: string
+ }
+ 
+ interface Assignments {
+@@ -94,6 +101,7 @@ const assignment = reactive({
+ 	type: '',
+ 	question: '',
+ 	course: '',
++	custom_due_date: '',
+ })
+ 
+ const props = defineProps({
+@@ -113,6 +121,7 @@ watch(
+ 					assignment.type = row.type
+ 					assignment.question = row.question
+ 					assignment.course = row.course || ''
++					assignment.custom_due_date = row.custom_due_date
+ 				}
+ 			})
+ 		}
+@@ -125,6 +134,7 @@ watch(show, (newVal) => {
+ 		assignment.title = ''
+ 		assignment.type = ''
+ 		assignment.question = ''
++		assignment.custom_due_date = ''
+ 	}
+ })
+ 
+diff --git a/frontend/src/pages/Assignments.vue b/frontend/src/pages/Assignments.vue
+index 3cd5f12..a932816 100644
+--- a/frontend/src/pages/Assignments.vue
++++ b/frontend/src/pages/Assignments.vue
+@@ -147,7 +147,15 @@ const assignmentFilter = computed(() => {
+ 
+ const assignments = createListResource({
+ 	doctype: 'LMS Assignment',
+-	fields: ['name', 'title', 'type', 'modified', 'question', 'course'],
++	fields: [
++		'name',
++		'title',
++		'type',
++		'modified',
++		'question',
++		'course',
++		'custom_due_date',
++	],
+ 	orderBy: 'modified desc',
+ 	cache: ['assignments'],
+ 	pageLength: 24,
+diff --git a/frontend/src/pages/Courses/Courses.vue b/frontend/src/pages/Courses/Courses.vue
+index 58b7903..f8ad5fa 100644
+--- a/frontend/src/pages/Courses/Courses.vue
++++ b/frontend/src/pages/Courses/Courses.vue
+@@ -125,7 +125,7 @@ const setCertification = (value) => {
+ 	updateCourses()
+ }
+ const filters = ref({})
+-const currentTab = ref('live')
++const currentTab = user.data?.is_student ? ref('enrolled') : ref('live')
+ const { brand } = sessionStore()
+ const router = useRouter()
+ const showCourseModal = ref(false)
+@@ -155,6 +155,22 @@ const courses = createListResource({
+ 	cache: ['courses', user.data?.name],
+ 	pageLength: 24,
+ 	start: start.value,
++	transform(data) {
++		if (
++			user.data?.is_instructor &&
++			!user.data?.is_system_manager &&
++			!user.data?.is_moderator &&
++			!user.data?.is_evaluator
++		) {
++			return data.filter((element) => {
++				return element.instructors.some(
++					(instructor) => instructor.name === user.data?.name
++				)
++			})
++		}
++
++		return data
++	},
+ })
+ 
+ // `list.loading` goes false mid-request: the aborted fetch's tail resolves
+@@ -302,21 +318,24 @@ watch(currentTab, () => {
+ })
+ 
+ const courseTabs = computed(() => {
+-	let tabs = [
+-		{
+-			label: __('Published'),
+-			value: 'live',
+-		},
+-		{
+-			label: __('Upcoming'),
+-			value: 'upcoming',
+-		},
+-	]
++	let tabs = []
+ 	if (
+ 		user.data?.is_moderator ||
+ 		user.data?.is_instructor ||
+ 		user.data?.is_evaluator
+ 	) {
++		tabs.push({
++			label: __('Live'),
++			value: 'live',
++		})
++		tabs.push({
++			label: __('New'),
++			value: 'new',
++		})
++		tabs.push({
++			label: __('Upcoming'),
++			value: 'upcoming',
++		})
+ 		tabs.push({ label: __('Created'), value: 'created' })
+ 		tabs.push({ label: __('Unpublished'), value: 'unpublished' })
+ 	} else if (user.data) {
+diff --git a/frontend/src/utils/index.js b/frontend/src/utils/index.js
+index b139179..9b183b4 100644
+--- a/frontend/src/utils/index.js
++++ b/frontend/src/utils/index.js
+@@ -573,6 +573,11 @@ const getSidebarItems = (forMobile = false) => {
+ 					to: 'Statistics',
+ 					activeFor: ['Statistics'],
+ 				},
++				{
++					label: 'Student Portal',
++					icon: 'LucideUser',
++					to: 'student-portal',
++				},
+ 				{
+ 					label: 'Contact Us',
+ 					icon: settings.data?.contact_us_url ? 'Headset' : 'Mail',
+diff --git a/frontend/vite.config.js b/frontend/vite.config.js
+index cee4dc3..98b5de9 100644
+--- a/frontend/vite.config.js
++++ b/frontend/vite.config.js
+@@ -18,7 +18,7 @@ export default defineConfig(async ({ mode }) => {
+ 				lucideIcons: true,
+ 				jinjaBootData: true,
+ 				buildConfig: {
+-					indexHtmlPath: '../lms/www/_lms.html',
++					indexHtmlPath: '../lms_extension/www/_lms.html',
+ 				},
+ 			}),
+ 			vue(),
+@@ -30,7 +30,7 @@ export default defineConfig(async ({ mode }) => {
+ 				workbox: {
+ 					cleanupOutdatedCaches: true,
+ 					maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+-					globDirectory: '/assets/lms/frontend',
++					globDirectory: '/assets/lms_extension/frontend',
+ 					globPatterns: ['**/*.{js,ts,css,html,svg}'],
+ 					runtimeCaching: [
+ 						{
+-- 
+2.43.0
+
