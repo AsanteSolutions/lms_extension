@@ -1,10 +1,12 @@
 <template>
-	<Dialog v-model:open="show" size="lg">
-		<template #body>
+	<Dialog v-model:open="show" size="lg" bare>
+		<template #default>
 			<div class="p-5 text-base">
-				<div class="text-xl-semibold text-ink-gray-9 mb-5">
+				<div class="text-lg-semibold text-ink-gray-9 mb-5">
 					{{
-						assignmentID === 'new' ? __('Create an Assignment') : __('Edit Assignment')
+						assignmentID === 'new'
+							? __('Create an Assignment')
+							: __('Edit Assignment')
 					}}
 				</div>
 				<div class="space-y-4 max-h-[75vh] overflow-y-auto p-1">
@@ -20,12 +22,6 @@
 						:label="__('Submission Type')"
 						:required="true"
 					/>
-					<FormControl
-						v-model="assignment.custom_due_date"
-						type="datetime-local"
-						:label="__('Due Date')"
-						:required="true"
-					/>
 					<Link
 						v-model="assignment.course"
 						:label="__('Course')"
@@ -37,7 +33,7 @@
 							{{ __('Question') }}
 							<span class="text-ink-red-6">*</span>
 						</div>
-						<TextEditor
+						<RichTextEditor
 							:content="assignment.question"
 							@change="(val) => (assignment.question = val)"
 							:editable="true"
@@ -69,10 +65,11 @@
 	</Dialog>
 </template>
 <script setup lang="ts">
-import { Button, Dialog, FormControl, TextEditor, toast } from 'frappe-ui'
+import { Button, Dialog, FormControl, toast } from 'frappe-ui'
 import { computed, reactive, watch } from 'vue'
 import { sanitizeHTML } from '@/utils'
 import Link from '@/components/Controls/Link.vue'
+import RichTextEditor from '@/components/RichTextEditor.vue'
 
 const show = defineModel()
 const assignments = defineModel<Assignments>('assignments')
@@ -82,7 +79,6 @@ interface Assignment {
 	type: string
 	question: string
 	course?: string
-	custom_due_date: string
 }
 
 interface Assignments {
@@ -98,7 +94,6 @@ const assignment = reactive({
 	type: '',
 	question: '',
 	course: '',
-	custom_due_date: '',
 })
 
 const props = defineProps({
@@ -118,12 +113,11 @@ watch(
 					assignment.type = row.type
 					assignment.question = row.question
 					assignment.course = row.course || ''
-					assignment.custom_due_date = row.custom_due_date
 				}
 			})
 		}
 	},
-	{ flush: 'post' },
+	{ flush: 'post' }
 )
 
 watch(show, (newVal) => {
@@ -131,7 +125,6 @@ watch(show, (newVal) => {
 		assignment.title = ''
 		assignment.type = ''
 		assignment.question = ''
-		assignment.custom_due_date = ''
 	}
 })
 
@@ -159,7 +152,7 @@ const createAssignment = () => {
 				show.value = false
 				toast.success(__('Assignment created successfully'))
 			},
-		},
+		}
 	)
 }
 
@@ -174,7 +167,7 @@ const updateAssignment = () => {
 				show.value = false
 				toast.success(__('Assignment updated successfully'))
 			},
-		},
+		}
 	)
 }
 

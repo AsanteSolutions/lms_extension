@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import path from 'path'
 import { VitePWA } from 'vite-plugin-pwa'
+import { viteStaticCopy } from 'vite-plugin-static-copy'
 
 export default defineConfig(async ({ mode }) => {
 	const isDev = mode === 'development'
@@ -17,7 +18,7 @@ export default defineConfig(async ({ mode }) => {
 				lucideIcons: true,
 				jinjaBootData: true,
 				buildConfig: {
-					indexHtmlPath: '../lms_extension/www/_lms.html',
+					indexHtmlPath: '../lms/www/_lms.html',
 				},
 			}),
 			vue(),
@@ -29,11 +30,12 @@ export default defineConfig(async ({ mode }) => {
 				workbox: {
 					cleanupOutdatedCaches: true,
 					maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
-					globDirectory: '/assets/lms_extension/frontend',
+					globDirectory: '/assets/lms/frontend',
 					globPatterns: ['**/*.{js,ts,css,html,svg}'],
 					runtimeCaching: [
 						{
-							urlPattern: ({ request }) => request.destination === 'document',
+							urlPattern: ({ request }) =>
+								request.destination === 'document',
 							handler: 'NetworkFirst',
 							options: {
 								cacheName: 'html-cache',
@@ -42,6 +44,22 @@ export default defineConfig(async ({ mode }) => {
 					],
 				},
 				manifest: false,
+			}),
+			// pdf.js needs cMaps (JPEG2000/JBIG2 + CJK) and standard_fonts (non-embedded
+			// fonts) as sibling assets, or those PDFs render blank and look like a pdf.js
+			// bug. Copy them under pdfjs/; PdfBlock.vue points cMapUrl/standardFontDataUrl
+			// at `${BASE_URL}pdfjs/...`. Served in dev too (static-copy dev middleware).
+			viteStaticCopy({
+				targets: [
+					{
+						src: 'node_modules/pdfjs-dist/cmaps/*',
+						dest: 'pdfjs/cmaps',
+					},
+					{
+						src: 'node_modules/pdfjs-dist/standard_fonts/*',
+						dest: 'pdfjs/standard_fonts',
+					},
+				],
 			}),
 		],
 		server: {
@@ -56,7 +74,8 @@ export default defineConfig(async ({ mode }) => {
 			proxy: {
 				'/scorm': {
 					target: 'http://127.0.0.1:8000',
-					router: (req) => `http://${req.headers.host.split(':')[0]}:8000`,
+					router: (req) =>
+						`http://${req.headers.host.split(':')[0]}:8000`,
 				},
 			},
 		},
@@ -71,10 +90,17 @@ export default defineConfig(async ({ mode }) => {
 				'prosemirror-state',
 				'prosemirror-view',
 				'prosemirror-transform',
+				'vue',
+				'frappe-ui',
 			],
 		},
 		optimizeDeps: {
-			include: ['feather-icons', 'tailwind.config.js', 'interactjs', 'highlight.js', 'plyr'],
+			include: [
+				'feather-icons',
+				'tailwind.config.js',
+				'highlight.js',
+				'plyr',
+			],
 			exclude: mode === 'production' ? [] : ['frappe-ui'],
 		},
 	}
@@ -87,7 +113,10 @@ async function importFrappeUIPlugin(isDev) {
 			const module = await import('../frappe-ui/vite')
 			return module.default
 		} catch (error) {
-			console.warn('Local frappe-ui not found, falling back to npm package:', error.message)
+			console.warn(
+				'Local frappe-ui not found, falling back to npm package:',
+				error.message
+			)
 		}
 	}
 	// Fall back to npm package if local import fails

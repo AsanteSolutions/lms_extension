@@ -9,7 +9,7 @@
 			}"
 		>
 			<div
-				class="text-xl-semibold leading-5 text-ink-gray-9"
+				class="text-lg-semibold leading-5 text-ink-gray-9"
 				:class="{ 'font-medium text-p-base': allowEdit }"
 			>
 				{{ __(title) }}
@@ -98,7 +98,7 @@ import type {
 	OutlineLesson,
 	Resource,
 	SessionUser,
-} from '@/types/api'
+} from '@/types'
 
 interface DraggableEvent {
 	item: { __draggable_context: { element: OutlineChapter | OutlineLesson } }
@@ -209,6 +209,11 @@ const deleteLesson = createResource({
 		outline.reload()
 		toast.success(__('Lesson deleted successfully'))
 	},
+	onError(err: { messages?: string[] } | string) {
+		toast.error(
+			typeof err === 'string' ? err : err.messages?.[0] ?? __('Error')
+		)
+	},
 })
 
 const updateLessonIndex = createResource({
@@ -246,6 +251,11 @@ const deleteChapter = createResource({
 	onSuccess() {
 		outline.reload()
 		toast.success(__('Chapter deleted successfully'))
+	},
+	onError(err: { messages?: string[] } | string) {
+		toast.error(
+			typeof err === 'string' ? err : err.messages?.[0] ?? __('Error')
+		)
 	},
 })
 
@@ -325,7 +335,7 @@ function navigateToLesson(lesson: OutlineLesson) {
 			name: 'CourseDetail',
 			params: { courseName: props.courseName },
 			hash: '#course editor',
-			query: { editLesson: lesson.number, lessonMode: 'edit' },
+			query: { editLesson: lesson.number },
 		})
 	}
 }

@@ -6,13 +6,13 @@
 	</LayoutHeader>
 	<div class="p-6">
 		<div class="flex items-center justify-between gap-x-32 mb-5">
-			<div class="text-lg font-semibold text-ink-gray-9">
+			<h1 class="text-md font-semibold text-ink-gray-9">
 				{{
 					submissions.data?.length
 						? __('{0} Submissions').format(submissions.data.length)
 						: __('No Submissions')
 				}}
-			</div>
+			</h1>
 			<div
 				v-if="submissions.data?.length || filters"
 				class="grid grid-cols-3 gap-5"
@@ -62,13 +62,14 @@
 					:key="item.key"
 				>
 					<template #prefix="{ item }">
-						<FeatherIcon :name="item.icon?.toString()" class="h-4 w-4" />
+						<span :class="[item.icon, 'h-4 w-4']" aria-hidden="true" />
 					</template>
 				</ListHeaderItem>
 			</ListHeader>
 			<ListRows>
 				<router-link
 					v-for="row in submissions.data"
+					:key="row.name"
 					:to="{
 						name: 'ProgrammingExerciseSubmission',
 						params: {
@@ -116,6 +117,7 @@
 					<div class="flex gap-2">
 						<Button
 							variant="ghost"
+							:label="__('Delete')"
 							@click="deleteExercises(selections, unselectAll)"
 						>
 							<span class="lucide-trash-2 size-4" />
@@ -147,7 +149,6 @@ import {
 	Breadcrumbs,
 	Button,
 	createListResource,
-	FeatherIcon,
 	FormControl,
 	ListView,
 	ListHeader,
@@ -159,10 +160,7 @@ import {
 	usePageMeta,
 	toast,
 } from 'frappe-ui'
-import type {
-	ProgrammingExerciseSubmission,
-	Filters,
-} from '@/pages/ProgrammingExercises/types'
+import type { ProgrammingExerciseSubmission, Filters } from '@/types'
 import { computed, inject, onMounted, ref, watch } from 'vue'
 import { sessionStore } from '@/stores/session'
 import { useRouter } from 'vue-router'
@@ -277,25 +275,25 @@ const submissionColumns = computed(() => {
 			label: __('Member'),
 			key: 'member_name',
 			width: '30%',
-			icon: 'user',
+			icon: 'lucide-user',
 		},
 		{
 			label: __('Exercise'),
 			key: 'exercise_title',
 			width: '30%',
-			icon: 'code',
+			icon: 'lucide-code',
 		},
 		{
 			label: __('Status'),
 			key: 'status',
 			width: '20%',
-			icon: 'check-circle',
+			icon: 'lucide-check-circle',
 		},
 		{
 			label: __('Modified'),
 			key: 'modified',
 			width: '15%',
-			icon: 'clock',
+			icon: 'lucide-clock',
 			align: 'right',
 		},
 	]

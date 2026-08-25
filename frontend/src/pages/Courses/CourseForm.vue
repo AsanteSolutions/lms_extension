@@ -50,7 +50,7 @@ import type {
 	CourseFormMeta,
 	Resource,
 	SessionUser,
-} from '@/types/api'
+} from '@/types'
 
 interface DialogAction {
 	label: string
@@ -248,6 +248,11 @@ const deleteCourse = createResource({
 		toast.success(__('Course deleted successfully'))
 		// Land on the creator's "Created" courses — pick another course to edit.
 		router.push({ name: 'Courses', query: { tab: 'created' } })
+	},
+	onError(err: { messages?: string[] } | string) {
+		toast.error(
+			typeof err === 'string' ? err : err.messages?.[0] ?? __('Error')
+		)
 	},
 }) as Resource<unknown>
 

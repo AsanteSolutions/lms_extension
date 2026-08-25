@@ -25,7 +25,7 @@
 		>
 			<span class="lucide-users size-7.5 text-ink-gray-5" />
 			<div class="flex flex-col items-center gap-1">
-				<span class="text-xl-medium text-ink-gray-8">
+				<span class="text-lg-medium text-ink-gray-8">
 					{{ __('No students enrolled yet') }}
 				</span>
 				<span class="text-p-base text-ink-gray-6">
@@ -36,13 +36,14 @@
 		<div v-else class="grid grid-cols-[2fr_1fr] gap-5 items-start">
 			<div class="border rounded-lg py-3 px-4">
 				<div class="flex items-center justify-between mb-3">
-					<div class="text-xl-semibold text-ink-gray-9">
+					<div class="text-lg-semibold text-ink-gray-9">
 						{{ __('Students') }}
 					</div>
 					<div class="flex items-center gap-x-2">
 						<FormControl
 							v-model="searchFilter"
 							:placeholder="__('Search')"
+							:aria-label="__('Search students')"
 							type="text"
 						>
 							<template #prefix>
@@ -152,24 +153,24 @@
 					<div
 						class="grid grid-cols-[2fr_1fr] items-center justify-between text-ink-gray-9"
 					>
-						<div class="flex flex-col space-y-4 flex-1 text-sm">
-							<div
+						<ul class="flex flex-col space-y-4 flex-1 text-sm list-none">
+							<li
 								class="flex items-center text-ink-gray-7"
 								v-for="row in chartDetails.data?.progress_distribution"
+								:key="row.name"
 							>
 								<div
 									class="size-2 rounded"
 									:style="{
-										backgroundColor:
-											colors[theme][
-												row.name.startsWith('Just')
-													? 'red'
-													: row.name.startsWith('In')
-													? 'amber'
-													: row.name.startsWith('Adv')
-													? 'blue'
-													: 'green'
-											][400],
+										backgroundColor: `var(--${
+											row.name.startsWith('Just')
+												? 'red'
+												: row.name.startsWith('In')
+												? 'amber'
+												: row.name.startsWith('Adv')
+												? 'blue'
+												: 'green'
+										}-400)`,
 									}"
 								></div>
 								<Tooltip :text="row.name.split('(')[1].replace(')', '')">
@@ -188,8 +189,8 @@
 										}}%
 									</div>
 								</Tooltip>
-							</div>
-						</div>
+							</li>
+						</ul>
 						<ECharts
 							class="w-40 h-20"
 							:options="{
@@ -239,11 +240,12 @@
 							class="!w-32"
 						/>
 					</div>
-					<div
-						class="divide-y max-h-[40vh] divide-outline-elevation-2 text-ink-gray-7 overflow-y-auto"
+					<ul
+						class="divide-y max-h-[40vh] divide-outline-elevation-2 text-ink-gray-7 overflow-y-auto list-none"
 					>
-						<div
+						<li
 							v-for="progress in lessonProgress.data"
+							:key="`${progress.chapter_idx}-${progress.idx}`"
 							class="flex justify-between text-sm py-2 my-1 text-ink-gray-9"
 						>
 							<div class="">
@@ -267,8 +269,8 @@
 									}}%
 								</div>
 							</Tooltip>
-						</div>
-					</div>
+						</li>
+					</ul>
 				</div>
 			</div>
 		</div>
@@ -308,14 +310,13 @@ import Select from '@/components/Controls/Select.vue'
 import { computed, inject, ref, watch } from 'vue'
 import type dayjsType from 'dayjs'
 import { formatAmount } from '@/utils'
-import colors from '@/utils/frappe-ui-colors.json'
 import CourseEnrollmentModal from '@/pages/Courses/CourseEnrollmentModal.vue'
 import EmptyStateLayout from '@/components/Layouts/EmptyStateLayout.vue'
 import NumberChartGraph from '@/components/NumberChartGraph.vue'
 import ProgressBar from '@/components/ProgressBar.vue'
 import StudentCourseProgress from '@/pages/Courses/StudentCourseProgress.vue'
 
-import type { CourseDetails, Resource } from '@/types/api'
+import type { CourseDetails, Resource } from '@/types'
 
 const props = defineProps<{
 	course: Resource<CourseDetails | null>
@@ -333,9 +334,6 @@ defineExpose({ openEnrollModal })
 
 const showProgressModal = ref<boolean>(false)
 const currentStudent = ref<Record<string, unknown> | null>(null)
-const theme = ref<'darkMode' | 'lightMode'>(
-	localStorage.getItem('theme') == 'dark' ? 'darkMode' : 'lightMode'
-)
 type Filters = {
 	course: string | undefined
 	member_name?: string[]
@@ -417,14 +415,9 @@ const showStudentsEmptyState = computed(
 		!progressList.loading && !progressList.data?.length && !searchFilter.value
 )
 
-const progressColors = computed(() => {
-	let colorList = []
-	colorList.push(colors[theme.value]['red'][400])
-	colorList.push(colors[theme.value]['amber'][400])
-	colorList.push(colors[theme.value]['blue'][400])
-	colorList.push(colors[theme.value]['green'][400])
-	return colorList
-})
+const progressColors = computed(() =>
+	['red', 'amber', 'blue', 'green'].map((color) => `var(--${color}-400)`)
+)
 
 const progressColumns = computed(() => {
 	return [

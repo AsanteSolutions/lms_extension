@@ -16,14 +16,14 @@
 				:class="inlineSelect ? '' : 'flex items-baseline justify-between gap-3'"
 				@click="redirectToChapter"
 			>
-				<Input
+				<TextInput
 					v-if="isRenaming"
 					ref="renameInput"
 					v-model="renameValue"
 					class="w-full"
 					@click.stop.prevent
-					@keydown.enter="commitRename"
-					@keydown.esc="cancelRename"
+					@keydown.enter.stop.prevent="commitRename"
+					@keydown.esc.stop.prevent="cancelRename"
 					@blur="commitRename"
 				/>
 				<div
@@ -144,13 +144,13 @@
 </template>
 
 <script setup lang="ts">
-import { Button, Input, Tooltip, toast } from 'frappe-ui'
+import { Button, TextInput, Tooltip, toast } from 'frappe-ui'
 import { computed, inject, nextTick, ref, watch } from 'vue'
 import Draggable from 'vuedraggable'
 import { Disclosure, DisclosureButton, DisclosurePanel } from '@headlessui/vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { RouteLocationRaw } from 'vue-router'
-import type { OutlineChapter, OutlineLesson, SessionUser } from '@/types/api'
+import type { OutlineChapter, OutlineLesson, SessionUser } from '@/types'
 
 interface DraggableEvent {
 	item: { __draggable_context: { element: OutlineChapter | OutlineLesson } }
@@ -196,7 +196,7 @@ const user = inject<SessionUser>('$user')!
 
 const isRenaming = ref<boolean>(false)
 const renameValue = ref<string>('')
-const renameInput = ref<{ $el: HTMLElement } | null>(null)
+const renameInput = ref<{ el: HTMLInputElement } | null>(null)
 
 // Tell the parent outline to lock chapter dragging while a name is being edited,
 // so a stray drag can't fire mid-rename.
@@ -206,7 +206,7 @@ function startRename(): void {
 	renameValue.value = props.chapter.title
 	isRenaming.value = true
 	nextTick(() => {
-		renameInput.value?.$el.querySelector('input')?.focus()
+		renameInput.value?.el?.focus()
 	})
 }
 
@@ -264,7 +264,7 @@ function lessonRoute(lesson: OutlineLesson): RouteLocationRaw {
 			name: 'CourseDetail',
 			params: { courseName: props.courseName },
 			hash: '#course editor',
-			query: { editLesson: lesson.number, lessonMode: 'edit' },
+			query: { editLesson: lesson.number },
 		}
 	}
 	return {

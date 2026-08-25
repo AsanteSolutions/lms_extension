@@ -8,7 +8,7 @@
 			class="border-e p-5 overflow-y-auto h-[calc(100vh-3.2rem)]"
 			:class="{ 'h-full': !showTitle }"
 		>
-			<div v-if="showTitle" class="text-xl-semibold mb-5 text-ink-gray-9">
+			<div v-if="showTitle" class="text-lg-semibold mb-5 text-ink-gray-9">
 				<div v-if="submissionName === 'new'">
 					{{ __('Submission by') }} {{ user.data?.full_name }}
 				</div>
@@ -47,7 +47,11 @@
 							:label="__('Save')"
 							combo="Mod+S"
 						>
-							<Button variant="solid" @click="submitAssignment()">
+							<Button
+								variant="solid"
+								:loading="isSubmitting"
+								@click="submitAssignment()"
+							>
 								{{ __('Save') }}
 							</Button>
 						</ShortcutTooltip>
@@ -64,31 +68,29 @@
 					{{ __("You've successfully submitted the assignment.") }}
 					{{
 						__(
-							"Once the moderator grades your submission, you'll find the details here.",
+							"Once the moderator grades your submission, you'll find the details here."
 						)
 					}}
-					<div v-if="Date.parse(assignment.data?.custom_due_date) > Date.now()">
-						{{ __('Feel free to make edits to your submission if needed.') }}
-					</div>
+					{{ __('Feel free to make edits to your submission if needed.') }}
 				</div>
 				<div v-if="showUploader()" class="border rounded-lg p-3">
 					<div class="font-semibold mb-2">
 						{{ __('Upload Assignment') }}
 					</div>
 					<div class="text-ink-gray-5 text-sm mt-1 mb-4">
-						{{ __('You can only upload {0} files').format(assignment.data.type) }}
+						{{
+							__('You can only upload {0} files').format(assignment.data.type)
+						}}
 					</div>
 					<FileUploader
-						v-if="
-							!attachment &&
-							Date.parse(assignment.data?.custom_due_date) > Date.now()
-						"
+						v-if="!attachment"
 						:fileTypes="getType()"
 						:uploadArgs="{
 							private: true,
 						}"
 						:validateFile="
-							(file) => validateFile(file, true, assignment.data.type.toLowerCase())
+							(file) =>
+								validateFile(file, true, assignment.data.type.toLowerCase())
 						"
 						@success="(file) => saveSubmission(file)"
 					>
@@ -118,8 +120,10 @@
 									</span>
 								</div>
 							</a>
-							<span
+							<button
 								v-if="canModifyAssignment"
+								type="button"
+								:aria-label="__('Remove submission')"
 								@click="removeSubmission()"
 								class="lucide-x bg-surface-gray-3 rounded-md cursor-pointer w-5 h-5 p-1 ms-4"
 							/>
@@ -130,18 +134,21 @@
 					<div class="text-p-sm-medium text-ink-gray-7 mb-1.5">
 						{{ __('Enter a URL') }}
 					</div>
-					<FormControl v-model="answer" type="text" :readonly="!canModifyAssignment" />
+					<FormControl
+						v-model="answer"
+						type="text"
+						:aria-label="__('Enter a URL')"
+					/>
 				</div>
-				<div v-else-if="assignment.data.type == 'Text'">
+				<div v-else>
 					<div class="text-sm mb-2 text-ink-gray-7">
 						{{ __('Write your answer here') }}
 					</div>
-					<TextEditor
+					<RichTextEditor
 						:content="answer"
 						@change="(val) => (answer = val)"
 						:editable="true"
 						:fixedMenu="true"
-						:readonly="!canModifyAssignment"
 						:uploadArgs="{
 							private: true,
 						}"
@@ -181,7 +188,7 @@
 						<div class="text-p-sm-medium text-ink-gray-7 mb-1.5">
 							{{ __('Comments') }}
 						</div>
-						<TextEditor
+						<RichTextEditor
 							:content="comments"
 							@change="
 								(val) => {
@@ -212,14 +219,17 @@ import {
 	createDocumentResource,
 	FileUploader,
 	FormControl,
-	TextEditor,
 	toast,
 } from 'frappe-ui'
 import { computed, inject, ref, watch } from 'vue'
 import ShortcutTooltip from '@/components/ShortcutTooltip.vue'
-import { useKeyboardShortcuts, saveShortcut } from '@/composables/useKeyboardShortcuts'
+import {
+	useKeyboardShortcuts,
+	saveShortcut,
+} from '@/composables/useKeyboardShortcuts'
 import { useRouter } from 'vue-router'
 import { validateFile } from '@/utils'
+import RichTextEditor from '@/components/RichTextEditor.vue'
 
 const answer = ref(null)
 const attachment = ref(null)
@@ -284,7 +294,12 @@ watch(submissionResource, () => {
 	}
 })
 
+const isSubmitting = ref(false)
+
 const submitAssignment = () => {
+	if (isSubmitting.value) return
+	isSubmitting.value = true
+
 	if (props.submissionName != 'new') {
 		updateSubmission()
 	} else {
@@ -309,7 +324,10 @@ const prepareSubmissionDoc = () => {
 const addNewSubmission = () => {
 	let doc = prepareSubmissionDoc()
 	if (!doc.assignment_attachment && !doc.answer) {
-		toast.error(__('Please provide an answer or upload a file before submitting.'))
+		toast.error(
+			__('Please provide an answer or upload a file before submitting.')
+		)
+		isSubmitting.value = false
 		return
 	}
 	call('frappe.client.insert', {
@@ -334,6 +352,9 @@ const addNewSubmission = () => {
 			toast.error(err.messages?.[0] || err)
 			console.error(err)
 		})
+		.finally(() => {
+			isSubmitting.value = false
+		})
 }
 
 const updateSubmission = () => {
@@ -353,13 +374,15 @@ const updateSubmission = () => {
 		{
 			onSuccess(data) {
 				isDirty.value = false
+				isSubmitting.value = false
 				toast.success(__('Changes saved successfully'))
 			},
 			onError(err) {
+				isSubmitting.value = false
 				toast.error(err.messages?.[0] || err)
 				console.error(err)
 			},
-		},
+		}
 	)
 }
 
@@ -370,7 +393,8 @@ const saveSubmission = (file) => {
 
 const markLessonProgress = () => {
 	let pathname = window.location.pathname.split('/')
-	if (!pathname.includes('courses')) pathname = window.parent.location.pathname.split('/')
+	if (!pathname.includes('courses'))
+		pathname = window.parent.location.pathname.split('/')
 	if (pathname[2] != 'courses') return
 	let lessonIndex = pathname.pop().split('-')
 
@@ -407,20 +431,20 @@ const removeSubmission = () => {
 
 const canGradeSubmission = computed(() => {
 	return (
-		(user.data?.is_moderator || user.data?.is_evaluator || user.data?.is_instructor) &&
+		(user.data?.is_moderator ||
+			user.data?.is_evaluator ||
+			user.data?.is_instructor) &&
 		props.submissionName != 'new' &&
 		router.currentRoute.value.name == 'AssignmentSubmission'
 	)
 })
 
 const canModifyAssignment = computed(() => {
-	const duedate = Date.parse(assignment.data?.custom_due_date)
 	if (props.submissionName == 'new') {
 		return true
 	} else if (
 		submissionResource.doc?.owner == user.data?.name &&
-		submissionResource.doc?.status == 'Not Graded' &&
-		duedate > Date.now()
+		submissionResource.doc?.status == 'Not Graded'
 	) {
 		return true
 	}

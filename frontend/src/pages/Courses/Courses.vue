@@ -1,9 +1,16 @@
 <template>
-	<LayoutHeader>
-		<template #left-header>
-			<Breadcrumbs :items="breadcrumbs" />
-		</template>
-		<template #right-header>
+	<ListPage
+		:breadcrumbs="breadcrumbs"
+		:title="__('All Courses')"
+		:rows="courses.data || []"
+		:loading="courses.list.loading || reloading"
+		:has-next-page="courses.hasNextPage"
+		v-model:page-length="pageLength"
+		empty-name="Courses"
+		empty-icon="lucide-book-open"
+		@load-more="courses.next()"
+	>
+		<template #actions>
 			<Dropdown
 				placement="right"
 				side="bottom"
@@ -28,95 +35,80 @@
 				</template>
 			</Dropdown>
 		</template>
-	</LayoutHeader>
-	<div class="flex min-h-0 flex-1 flex-col p-5 pb-10">
-		<div
-			class="mb-5 flex flex-col justify-between space-y-4 lg:flex-row lg:items-center lg:space-y-0"
-		>
-			<div class="text-xl-semibold text-ink-gray-9">
-				{{ __('All Courses') }}
-			</div>
-			<div
-				class="flex flex-col space-y-4 lg:flex-row lg:items-center lg:gap-x-4 lg:space-y-0"
+
+		<template #tabs>
+			<TabButtons :options="courseTabs" v-model="currentTab" class="w-fit" />
+		</template>
+
+		<template #filters>
+			<FormControl
+				v-model="title"
+				:placeholder="__('Search')"
+				:aria-label="__('Search')"
+				type="text"
+				class="w-full sm:min-w-40 lg:w-32 lg:min-w-0 xl:w-40"
+				@input="updateCourses()"
 			>
-				<TabButtons :buttons="courseTabs" v-model="currentTab" class="w-fit" />
+				<template #prefix>
+					<span class="lucide-search size-4 text-ink-gray-5" />
+				</template>
+			</FormControl>
+			<ClearableCombobox
+				v-if="categories.data?.length"
+				v-model="currentCategory"
+				:options="categories.data.filter((c) => c.value)"
+				:placeholder="__('Category')"
+				@update:modelValue="updateCourses()"
+				class="w-full sm:w-auto"
+			/>
+		</template>
 
-				<FormControl
-					v-model="title"
-					:placeholder="__('Search')"
-					type="text"
-					class="w-full lg:w-40"
-					@input="updateCourses()"
-				>
-					<template #prefix>
-						<span class="lucide-search size-4 text-ink-gray-5" />
-					</template>
-				</FormControl>
+		<template #toggles>
+			<ToggleFilter
+				:modelValue="certification"
+				:label="__('Certification')"
+				:mobileLabel="__('Certification available')"
+				:tooltip="__('Only show courses that offer a certificate')"
+				@update:modelValue="setCertification"
+			/>
+		</template>
 
-				<ClearableCombobox
-					v-if="categories.data?.length"
-					v-model="currentCategory"
-					:options="categories.data.filter((c) => c.value)"
-					:placeholder="__('Category')"
-					@update:modelValue="updateCourses()"
-					class="w-full lg:w-40"
-				/>
-
-				<Tooltip :text="__('Only show courses that offer a certificate')">
-					<FormControl
-						type="checkbox"
-						v-model="certification"
-						:label="__('Certification')"
-						@change="updateCourses()"
-					/>
-				</Tooltip>
-			</div>
-		</div>
-		<SkeletonLoader v-if="courses.list.loading && !courses.data" variant="cards" :count="8" />
-		<div
-			v-else-if="courses.data?.length"
-			class="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"
-		>
+		<template #card="{ row }">
 			<router-link
-				v-for="course in courses.data"
-				:to="{ name: 'CourseDetail', params: { courseName: course.name } }"
+				:to="{ name: 'CourseDetail', params: { courseName: row.name } }"
 			>
-				<CourseCard :course="course" />
+				<CourseCard :course="row" />
 			</router-link>
-		</div>
-		<div v-else-if="!courses.list.loading" class="flex-1">
-			<EmptyStateLayout name="Courses" icon="lucide-book-open" />
-		</div>
-		<div v-if="!courses.list.loading && courses.hasNextPage" class="flex justify-center mt-5">
-			<Button @click="courses.next()">
-				{{ __('Load More') }}
-			</Button>
-		</div>
-	</div>
-	<NewCourseModal v-if="showCourseModal" v-model="showCourseModal" :courses="courses" />
+		</template>
+	</ListPage>
 
-	<CourseImportModal v-if="showCourseImportModal" v-model="showCourseImportModal" />
+	<NewCourseModal
+		v-if="showCourseModal"
+		v-model="showCourseModal"
+		:courses="courses"
+	/>
+
+	<CourseImportModal
+		v-if="showCourseImportModal"
+		v-model="showCourseImportModal"
+	/>
 </template>
 <script setup>
 import {
-	Breadcrumbs,
 	Button,
-	call,
 	createListResource,
 	Dropdown,
 	FormControl,
 	TabButtons,
-	Tooltip,
 	usePageMeta,
 } from 'frappe-ui'
 import ClearableCombobox from '@/components/Controls/ClearableCombobox.vue'
+import ToggleFilter from '@/components/Controls/ToggleFilter.vue'
+import ListPage from '@/components/Layouts/ListPage.vue'
 import { computed, inject, onMounted, ref, watch } from 'vue'
 import { sessionStore } from '@/stores/session'
 import { canCreateCourse } from '@/utils'
 import CourseCard from '@/components/CourseCard.vue'
-import SkeletonLoader from '@/components/SkeletonLoader.vue'
-import EmptyStateLayout from '@/components/Layouts/EmptyStateLayout.vue'
-import LayoutHeader from '@/components/Layouts/LayoutHeader.vue'
 import { useRouter } from 'vue-router'
 import NewCourseModal from '@/pages/Courses/NewCourseModal.vue'
 import CourseImportModal from '@/pages/Courses/CourseImportModal.vue'
@@ -124,14 +116,17 @@ import CourseImportModal from '@/pages/Courses/CourseImportModal.vue'
 const user = inject('$user')
 const dayjs = inject('$dayjs')
 const start = ref(0)
-const pageLength = ref(30)
 const currentCategory = ref(null)
 const title = ref('')
 const certification = ref(false)
+
+const setCertification = (value) => {
+	certification.value = value
+	updateCourses()
+}
 const filters = ref({})
-const currentTab = user.data?.is_student ? ref('enrolled') : ref('live')
+const currentTab = ref('live')
 const { brand } = sessionStore()
-const courseCount = ref(0)
 const router = useRouter()
 const showCourseModal = ref(false)
 const showCourseImportModal = ref(false)
@@ -139,14 +134,14 @@ const showCourseImportModal = ref(false)
 onMounted(() => {
 	setFiltersFromQuery()
 	updateCourses()
-	getCourseCount()
 })
 
 const setFiltersFromQuery = () => {
 	let queries = new URLSearchParams(location.search)
 	title.value = queries.get('title') || ''
 	currentCategory.value = queries.get('category') || null
-	certification.value = queries.get('certification') || false
+	// `|| false` would keep the raw string, so ?certification=false read as on.
+	certification.value = queries.get('certification') === 'true'
 	const tab = queries.get('tab')
 	if (tab) currentTab.value = tab
 	if (queries.get('newCourse') == '1') {
@@ -158,23 +153,31 @@ const courses = createListResource({
 	doctype: 'LMS Course',
 	url: 'lms.lms.utils.get_courses',
 	cache: ['courses', user.data?.name],
-	pageLength: pageLength.value,
+	pageLength: 24,
 	start: start.value,
-	transform(data) {
-		if (
-			user.data?.is_instructor &&
-			!user.data?.is_system_manager &&
-			!user.data?.is_moderator &&
-			!user.data?.is_evaluator
-		) {
-			return data.filter((element) => {
-				return element.instructors.some(
-					(instructor) => instructor.name === user.data?.name,
-				)
-			})
-		}
+})
 
-		return data
+// `list.loading` goes false mid-request: the aborted fetch's tail resolves
+// after the new reload() has started and clears the flag for it, so the empty
+// state flashes until the reload lands.
+const reloading = ref(false)
+
+const reloadCourses = async () => {
+	reloading.value = true
+	try {
+		await courses.reload()
+	} finally {
+		reloading.value = false
+	}
+}
+
+const pageLength = computed({
+	get: () => courses.pageLength,
+	set: (value) => {
+		// reload() refetches only the rows already loaded when start > 0, so
+		// without rewinding to the first page a bigger page size changes nothing.
+		courses.update({ pageLength: value, start: 0 })
+		reloadCourses()
 	},
 })
 
@@ -185,22 +188,17 @@ const categories = createListResource({
 	auto: true,
 })
 
-const getCourseCount = () => {
-	if (!user.data) return
-	if (!user.data.is_moderator) return
-	call('frappe.client.get_count', {
-		doctype: 'LMS Course',
-	}).then((data) => {
-		courseCount.value = data
-	})
-}
-
 const updateCourses = () => {
 	updateFilters()
+	// createResource keeps no request sequence: every response assigns
+	// `data`, so a slow fetch for filters the user has already left repaints
+	// the list with the wrong courses seconds later. Cancel it first — an
+	// aborted fetch is swallowed and never reaches the list.
+	courses.list.abort()
 	courses.update({
 		filters: filters.value,
 	})
-	courses.reload()
+	reloadCourses()
 }
 
 const updateFilters = () => {
@@ -257,7 +255,10 @@ const updateTabFilter = () => {
 			filters.value['upcoming'] = 1
 		} else if (currentTab.value == 'new') {
 			filters.value['published'] = 1
-			filters.value['published_on'] = ['>=', dayjs().add(-3, 'month').format('YYYY-MM-DD')]
+			filters.value['published_on'] = [
+				'>=',
+				dayjs().add(-3, 'month').format('YYYY-MM-DD'),
+			]
 		} else if (currentTab.value == 'created') {
 			filters.value['created'] = 1
 		} else if (currentTab.value == 'unpublished') {
@@ -301,20 +302,21 @@ watch(currentTab, () => {
 })
 
 const courseTabs = computed(() => {
-	let tabs = []
-	if (user.data?.is_moderator || user.data?.is_instructor || user.data?.is_evaluator) {
-		tabs.push({
-			label: __('Live'),
+	let tabs = [
+		{
+			label: __('Published'),
 			value: 'live',
-		})
-		tabs.push({
-			label: __('New'),
-			value: 'new',
-		})
-		tabs.push({
+		},
+		{
 			label: __('Upcoming'),
 			value: 'upcoming',
-		})
+		},
+	]
+	if (
+		user.data?.is_moderator ||
+		user.data?.is_instructor ||
+		user.data?.is_evaluator
+	) {
 		tabs.push({ label: __('Created'), value: 'created' })
 		tabs.push({ label: __('Unpublished'), value: 'unpublished' })
 	} else if (user.data) {
@@ -327,14 +329,14 @@ const courseMenu = computed(() => {
 	return [
 		{
 			label: __('New Course'),
-			icon: 'book-open',
+			icon: 'lucide-book-open',
 			onClick() {
 				showCourseModal.value = true
 			},
 		},
 		{
 			label: __('Import via Data Import Tool'),
-			icon: 'upload',
+			icon: 'lucide-upload',
 			onClick() {
 				router.push({
 					name: 'NewDataImport',
@@ -344,7 +346,7 @@ const courseMenu = computed(() => {
 		},
 		{
 			label: __('Import via ZIP'),
-			icon: 'folder-plus',
+			icon: 'lucide-folder-plus',
 			onClick() {
 				showCourseImportModal.value = true
 			},

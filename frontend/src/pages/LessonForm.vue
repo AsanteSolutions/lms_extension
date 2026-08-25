@@ -27,9 +27,11 @@
 				ref="titleRef"
 				v-model="lesson.title"
 				:placeholder="__('Lesson title')"
+				:aria-label="__('Lesson title')"
 				rows="1"
-				class="lesson-title w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-3xl font-bold leading-tight text-ink-gray-9 placeholder:text-ink-gray-4 focus:outline-none focus:ring-0"
+				class="lesson-title w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-2xl font-bold leading-tight text-ink-gray-9 placeholder:text-ink-gray-4 focus:outline-none focus:ring-0"
 				@input="onTitleInput"
+				@keydown.enter="onTitleEnter"
 			/>
 
 			<details
@@ -74,6 +76,7 @@ import {
 	Badge,
 	Button,
 	Switch,
+	call,
 	createResource,
 	toast,
 	Tooltip,
@@ -90,7 +93,12 @@ import {
 import { ChevronRight, NotebookPen } from 'lucide-vue-next'
 import { useDebounceFn } from '@vueuse/core'
 import { enablePlyr, sanitizeEditorJs } from '@/utils'
-import { hasEditorContent, shouldSkipLessonSave } from '@/utils/lessonForm'
+import {
+	hasEditorContent,
+	shouldSkipLessonSave,
+	toSingleLineTitle,
+} from '@/utils/lessonForm'
+import { convertBodyToBlocks as convertToJSON } from '@/utils/lessonMacros'
 import { hasVideoContent } from '@/utils/video'
 import BlockEditor from '@/components/BlockEditor.vue'
 import { useOnboarding, useTelemetry } from 'frappe-ui/frappe'
@@ -104,7 +112,17 @@ const instructorEditor = ref(null)
 const user = inject('$user')
 const titleRef = ref(null)
 
+// A lesson title is one line. The field stays a textarea so a long title wraps
+// and grows; only the explicit break is refused.
+function onTitleEnter(event) {
+	// Enter also confirms an IME candidate — never swallow that one.
+	if (event.isComposing) return
+	event.preventDefault()
+}
+
 function onTitleInput() {
+	// Enter is refused on keydown, but a paste or a drop can still carry breaks.
+	lesson.title = toSingleLineTitle(lesson.title)
 	autoGrowTitle()
 	markDirty({ fromTitle: true })
 }
@@ -121,11 +139,12 @@ function autoGrowTitle() {
 	el.style.height = `${el.scrollHeight}px`
 }
 
-const contentUploadContext = { docname: null, fieldname: 'content' }
-const instructorUploadContext = {
+// reactive so the upload block picks up `docname` once the lesson is saved.
+const contentUploadContext = reactive({ docname: null, fieldname: 'content' })
+const instructorUploadContext = reactive({
 	docname: null,
 	fieldname: 'instructor_content',
-}
+})
 const { capture } = useTelemetry()
 const { updateOnboardingStep } = useOnboarding('learning')
 
@@ -223,6 +242,8 @@ const lessonDetails = createResource({
 			Object.keys(data.lesson).forEach((key) => {
 				lesson[key] = data.lesson[key]
 			})
+			// Titles saved before Enter was refused still hold breaks.
+			lesson.title = toSingleLineTitle(lesson.title)
 			lesson.include_in_preview = data?.lesson?.include_in_preview
 				? true
 				: false
@@ -335,114 +356,6 @@ const lessonReference = createResource({
 	},
 })
 
-const convertToJSON = (lessonData) => {
-	let blocks = []
-	// Dedupe a video shared by the youtube field and body macro.
-	const seenYoutube = new Set()
-	const youtubeKey = (url) => url.split('/').pop().split('?')[0]
-	const pushYoutube = (embedUrl) => {
-		const key = youtubeKey(embedUrl)
-		if (seenYoutube.has(key)) return
-		seenYoutube.add(key)
-		blocks.push({
-			type: 'embed',
-			data: { service: 'youtube', embed: embedUrl },
-		})
-	}
-	if (lessonData.youtube) {
-		let youtubeID = lessonData.youtube.split('/').pop()
-		pushYoutube(`https://www.youtube.com/embed/${youtubeID}`)
-	}
-	lessonData.body.split('\n').forEach((block) => {
-		if (block.includes('{{ YouTubeVideo')) {
-			let youtubeID = block.match(/\(["']([^"']+?)["']\)/)[1]
-			if (!youtubeID.includes('https://'))
-				youtubeID = `https://www.youtube.com/embed/${youtubeID}`
-			pushYoutube(youtubeID)
-		} else if (block.includes('{{ Quiz')) {
-			let quiz = block.match(/\(["']([^"']+?)["']\)/)[1]
-			blocks.push({
-				type: 'quiz',
-				data: {
-					quiz: quiz,
-				},
-			})
-		} else if (block.includes('{{ Video')) {
-			let video = block.match(/\(["']([^"']+?)["']\)/)[1]
-			blocks.push({
-				type: 'upload',
-				data: {
-					file_url: video,
-					file_type: video.split('.').pop(),
-				},
-			})
-		} else if (block.includes('{{ Audio')) {
-			let audio = block.match(/\(["']([^"']+?)["']\)/)[1]
-			blocks.push({
-				type: 'upload',
-				data: {
-					file_url: audio,
-					file_type: audio.split('.').pop(),
-				},
-			})
-		} else if (block.includes('{{ PDF')) {
-			let pdf = block.match(/\(["']([^"']+?)["']\)/)[1]
-			blocks.push({
-				type: 'upload',
-				data: {
-					file_url: pdf,
-					file_type: 'pdf',
-				},
-			})
-		} else if (block.includes('{{ Embed')) {
-			let embed = block.match(/\(["']([^"']+?)["']\)/)[1]
-			blocks.push({
-				type: 'embed',
-				data: {
-					service: embed.split('|||')[0],
-					embed: embed.split('|||')[1],
-				},
-			})
-		} else if (block.includes('![]')) {
-			let image = block.match(/\((.*?)\)/)[1]
-			blocks.push({
-				type: 'upload',
-				data: {
-					file_url: image,
-					file_type: 'image',
-				},
-			})
-		} else if (block.includes('#')) {
-			let level = (block.match(/#/g) || []).length
-			blocks.push({
-				type: 'header',
-				data: {
-					text: block.replace(/#/g, '').trim(),
-					level: level,
-				},
-			})
-		} else {
-			blocks.push({
-				type: 'paragraph',
-				data: {
-					text: block,
-				},
-			})
-		}
-	})
-
-	if (lessonData.quizId) {
-		blocks.push({
-			type: 'quiz',
-			data: {
-				quiz: lessonData.quizId,
-			},
-		})
-	}
-
-	return blocks
-}
-
 // Stored body has real content? Lets title-only edits skip re-serialising.
 const storedContentHasBody = () => {
 	if (!lesson.content) return false
@@ -549,7 +462,7 @@ const createNewLesson = () => {
 	)
 }
 
-const editCurrentLesson = () => {
+const editCurrentLesson = (isRetry = false) => {
 	// Catch the re-thrown rejection: a save racing a delete 404s harmlessly.
 	editLesson
 		.submit(
@@ -573,9 +486,36 @@ const editCurrentLesson = () => {
 		)
 		.catch((err) => {
 			if (lessonDeleted) return
+			// The daily untitled-lesson rename can move the docname under an open
+			// editor; re-resolve it by index and retry once (a plain reload would
+			// drop the unsaved edits we're saving).
+			if (!isRetry && err?.exc_type === 'DoesNotExistError') {
+				resolveLessonName().then((name) => {
+					if (name) editCurrentLesson(true)
+					else toast.error(err.messages?.[0] || err.message || err)
+				})
+				return
+			}
 			toast.error(err.messages?.[0] || err.message || err)
 		})
 }
+
+const resolveLessonName = () =>
+	call('lms.lms.utils.get_lesson_creation_details', {
+		course: props.courseName,
+		chapter: props.chapterNumber,
+		lesson: props.lessonNumber,
+	})
+		.then((data) => {
+			const name = data?.lesson?.name
+			if (name) {
+				lessonDetails.data.lesson.name = name
+				contentUploadContext.docname = name
+				instructorUploadContext.docname = name
+			}
+			return name || null
+		})
+		.catch(() => null)
 
 const validateLesson = () => {
 	if (!lesson.title) {

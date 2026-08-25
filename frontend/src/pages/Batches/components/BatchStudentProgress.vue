@@ -3,8 +3,9 @@
 		v-model:open="show"
 		size="xl"
 		:title="studentDetails.data?.full_name || __('Student Details')"
+		bare
 	>
-		<template #body>
+		<template #default>
 			<div
 				v-if="studentDetails.loading && !studentDetails.data"
 				class="flex items-center justify-center py-12"
@@ -16,7 +17,7 @@
 					<Avatar :image="studentDetails.data.user_image" size="3xl" />
 					<div class="space-y-1">
 						<div class="flex items-center gap-x-2">
-							<div class="text-3xl-semibold text-ink-gray-9">
+							<div class="text-2xl-semibold text-ink-gray-9">
 								{{ studentDetails.data.full_name }}
 							</div>
 							<Badge
@@ -47,14 +48,17 @@
 							showTooltip: false,
 							onRowClick: (row: any) => {
 								redirectToAssessment(row)
-							}
+							},
 						}"
 					>
 						<ListHeader
 							class="mb-2 grid items-center gap-x-4 rounded-t-lg bg-surface-gray-2 p-2"
 						>
 						</ListHeader>
-						<ListRows v-for="row in studentDetails.data.assessments">
+						<ListRows
+							v-for="(row, index) in studentDetails.data.assessments"
+							:key="index"
+						>
 							<ListRow :row="row" class="!rounded-none last:!rounded-b-lg">
 								<template #default="{ column, item }">
 									<ListRowItem
@@ -89,14 +93,17 @@
 							showTooltip: false,
 							onRowClick: (row: any) => {
 								redirectToCourse(row)
-							}
+							},
 						}"
 					>
 						<ListHeader
 							class="mb-2 grid items-center gap-x-4 rounded-t-lg bg-surface-gray-2 p-2"
 						>
 						</ListHeader>
-						<ListRows v-for="row in studentDetails.data.courses">
+						<ListRows
+							v-for="row in studentDetails.data.courses"
+							:key="row.course"
+						>
 							<ListRow :row="row" class="!rounded-none last:!rounded-b-lg">
 								<template #default="{ column, item }">
 									<ListRowItem
