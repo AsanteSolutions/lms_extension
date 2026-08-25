@@ -125,7 +125,7 @@ const setCertification = (value) => {
 	updateCourses()
 }
 const filters = ref({})
-const currentTab = ref('live')
+const currentTab = user.data?.is_student ? ref('enrolled') : ref('live')
 const { brand } = sessionStore()
 const router = useRouter()
 const showCourseModal = ref(false)
@@ -155,6 +155,22 @@ const courses = createListResource({
 	cache: ['courses', user.data?.name],
 	pageLength: 24,
 	start: start.value,
+	transform(data) {
+		if (
+			user.data?.is_instructor &&
+			!user.data?.is_system_manager &&
+			!user.data?.is_moderator &&
+			!user.data?.is_evaluator
+		) {
+			return data.filter((element) => {
+				return element.instructors.some(
+					(instructor) => instructor.name === user.data?.name
+				)
+			})
+		}
+
+		return data
+	},
 })
 
 // `list.loading` goes false mid-request: the aborted fetch's tail resolves
@@ -302,21 +318,24 @@ watch(currentTab, () => {
 })
 
 const courseTabs = computed(() => {
-	let tabs = [
-		{
-			label: __('Published'),
-			value: 'live',
-		},
-		{
-			label: __('Upcoming'),
-			value: 'upcoming',
-		},
-	]
+	let tabs = []
 	if (
 		user.data?.is_moderator ||
 		user.data?.is_instructor ||
 		user.data?.is_evaluator
 	) {
+		tabs.push({
+			label: __('Live'),
+			value: 'live',
+		})
+		tabs.push({
+			label: __('New'),
+			value: 'new',
+		})
+		tabs.push({
+			label: __('Upcoming'),
+			value: 'upcoming',
+		})
 		tabs.push({ label: __('Created'), value: 'created' })
 		tabs.push({ label: __('Unpublished'), value: 'unpublished' })
 	} else if (user.data) {

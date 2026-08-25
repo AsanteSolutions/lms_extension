@@ -71,7 +71,11 @@
 							"Once the moderator grades your submission, you'll find the details here."
 						)
 					}}
-					{{ __('Feel free to make edits to your submission if needed.') }}
+					<div
+						v-if="Date.parse(assignment.data?.custom_due_date) > Date.now()"
+					>
+						{{ __('Feel free to make edits to your submission if needed.') }}
+					</div>
 				</div>
 				<div v-if="showUploader()" class="border rounded-lg p-3">
 					<div class="font-semibold mb-2">
@@ -83,7 +87,10 @@
 						}}
 					</div>
 					<FileUploader
-						v-if="!attachment"
+						v-if="
+							!attachment &&
+							Date.parse(assignment.data?.custom_due_date) > Date.now()
+						"
 						:fileTypes="getType()"
 						:uploadArgs="{
 							private: true,
@@ -138,9 +145,10 @@
 						v-model="answer"
 						type="text"
 						:aria-label="__('Enter a URL')"
+						:readonly="!canModifyAssignment"
 					/>
 				</div>
-				<div v-else>
+				<div v-else-if="assignment.data.type == 'Text'">
 					<div class="text-sm mb-2 text-ink-gray-7">
 						{{ __('Write your answer here') }}
 					</div>
@@ -440,11 +448,13 @@ const canGradeSubmission = computed(() => {
 })
 
 const canModifyAssignment = computed(() => {
+	const duedate = Date.parse(assignment.data?.custom_due_date)
 	if (props.submissionName == 'new') {
 		return true
 	} else if (
 		submissionResource.doc?.owner == user.data?.name &&
-		submissionResource.doc?.status == 'Not Graded'
+		submissionResource.doc?.status == 'Not Graded' &&
+		duedate > Date.now()
 	) {
 		return true
 	}
