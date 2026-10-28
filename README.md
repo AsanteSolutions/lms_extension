@@ -12,6 +12,10 @@ bench get-app $URL_OF_THIS_REPO --branch version-16
 bench install-app lms_extension
 ```
 
+### Updating to a newer Frappe LMS
+
+See [SYNCING.md](SYNCING.md).
+
 ### Contributing
 
 This app uses `pre-commit` for code formatting and linting. Please [install pre-commit](https://pre-commit.com/#installation) and enable it for this repository:
