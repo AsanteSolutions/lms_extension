@@ -12,44 +12,37 @@
 		@load-more="jobs.next()"
 	>
 		<template #actions>
-			<router-link
+			<Button
 				v-if="
 					user.data?.name && settings.data?.allow_job_posting && !readOnlyMode
 				"
-				:to="{
+				variant="solid"
+				:route="{
 					name: 'JobForm',
 					params: {
 						jobName: 'new',
 					},
 				}"
 			>
-				<Button variant="solid">
-					<template #prefix>
-						<span class="lucide-plus size-4" />
-					</template>
-					{{ __('Create') }}
-				</Button>
-			</router-link>
+				<template #prefix>
+					<span class="lucide-plus size-4" />
+				</template>
+				{{ __('New Job') }}
+			</Button>
 		</template>
 
-		<template #tabs>
+		<template #filters>
 			<TabButtons
 				v-if="tabs.length > 1"
 				v-model="activeTab"
 				:options="tabs"
-				class="w-fit"
-				@change="updateJobs"
+				class="!w-fit shrink-0"
 			/>
-		</template>
-
-		<template #filters>
 			<FormControl
 				type="text"
 				:placeholder="__('Search')"
 				:aria-label="__('Search jobs')"
 				v-model="searchQuery"
-				class="w-full"
-				@input="updateJobs"
 			>
 				<template #prefix>
 					<span class="lucide-search size-4 text-ink-gray-5" />
@@ -60,19 +53,16 @@
 				doctype="Country"
 				v-model="country"
 				:placeholder="__('Country')"
-				class="w-full"
 			/>
 			<Select
 				v-model="jobType"
 				:options="jobTypes"
-				class="w-full"
 				:placeholder="__('Type')"
 				@update:modelValue="updateJobs"
 			/>
 			<Select
 				v-model="workMode"
 				:options="workModes"
-				class="w-full"
 				:placeholder="__('Work Mode')"
 				@update:modelValue="updateJobs"
 			/>
@@ -251,16 +241,23 @@ watch(country, () => {
 	updateJobs()
 })
 
+// Watch, not a listener. TextInput emits on both input and change.
+watch(searchQuery, () => {
+	updateJobs()
+})
+
 const tabs = computed(() => {
 	const tabsArray = [
 		{
 			label: __('Open'),
+			value: 'Open',
 		},
 	]
 
 	if (closedJobs.value) {
 		tabsArray.push({
 			label: __('Closed'),
+			value: 'Closed',
 		})
 	}
 

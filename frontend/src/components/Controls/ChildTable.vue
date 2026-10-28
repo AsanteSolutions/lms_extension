@@ -1,7 +1,12 @@
 <template>
 	<div class="space-y-1.5">
-		<FormLabel :label="label" />
-		<div class="overflow-visible border border-outline-elevation-2 rounded-md">
+		<InputLabel
+			v-if="label"
+			:id="labelId"
+			:label="label"
+			:required="required"
+		/>
+		<div class="overflow-visible border border-outline-elevation-2 rounded-5">
 			<div class="overflow-x-auto">
 				<div
 					class="grid items-center gap-x-4 p-2 border-b border-outline-elevation-2"
@@ -27,7 +32,7 @@
 							v-if="showKey(key)"
 							v-model="row[key]"
 							:aria-label="columnLabel(key)"
-							class="py-1.5 px-2 w-full border-none bg-transparent text-ink-gray-8 focus:ring-0 focus:border focus:border-outline-gray-3 focus:bg-surface-gray-2 rounded-md text-sm focus:outline-none"
+							class="py-1.5 px-2 w-full border-none bg-transparent text-ink-gray-8 focus:ring-0 focus:border focus:border-outline-gray-3 focus:bg-surface-gray-2 rounded-5 text-sm focus:outline-none"
 						/>
 					</template>
 
@@ -47,7 +52,7 @@
 						<div
 							v-if="menuOpenIndex === rowIndex"
 							ref="menuRef"
-							class="absolute end-0 w-32 z-50 bg-surface-elevation-2 border border-outline-elevation-2 rounded-md shadow-sm"
+							class="absolute end-0 w-32 z-50 bg-surface-elevation-2 border border-outline-elevation-2 rounded-5 shadow-sm"
 							:class="
 								rowIndex == (rows?.length ?? 0) - 1
 									? 'bottom-full mb-1'
@@ -57,7 +62,7 @@
 							<button
 								type="button"
 								@click="deleteRow(rowIndex)"
-								class="flex items-center gap-x-2 w-full text-start px-3 py-2 text-sm text-ink-red-6"
+								class="flex items-center gap-x-2 w-full text-start px-3 py-2 text-sm text-ink-red-5"
 							>
 								<span class="lucide-trash-2 size-4" />
 								<span>
@@ -75,16 +80,28 @@
 				<template #prefix>
 					<span class="lucide-plus size-4 text-ink-gray-7" />
 				</template>
-				{{ __('Add Row') }}
+				{{ placeholder || __('Add Row') }}
 			</Button>
 		</div>
+		<InputDescription
+			v-if="showDescription"
+			:id="descriptionId"
+			:description="description"
+		/>
+		<InputError v-if="hasError" :id="errorMessageId" :lines="errorLines" />
 	</div>
 </template>
 
 <script setup lang="ts">
 import { nextTick, ref, watch } from 'vue'
-import { Button, FormLabel } from 'frappe-ui'
+import { Button } from 'frappe-ui'
 import { onClickOutside } from '@vueuse/core'
+import {
+	InputDescription,
+	InputError,
+	InputLabel,
+	useInputLabeling,
+} from 'frappe-ui/experimental'
 
 const rows = defineModel<Record<string, string>[]>()
 const menuRef = ref(null)
@@ -96,16 +113,16 @@ const emit = defineEmits<{
 	(e: 'update:modelValue', value: Record<string, string>[]): void
 }>()
 
-type Cell = {
-	value: string
-	editable?: boolean
-}
-
 const props = withDefaults(
 	defineProps<{
 		modelValue?: Record<string, string>[]
 		columns?: string[]
 		label?: string
+		description?: string
+		error?: string
+		required?: boolean
+		/** Add-row button text. Already translated by the caller. */
+		placeholder?: string
 	}>(),
 	{
 		columns: () => [] as string[],
@@ -113,6 +130,14 @@ const props = withDefaults(
 )
 
 const columns = ref(props.columns)
+const {
+	labelId,
+	descriptionId,
+	errorMessageId,
+	hasError,
+	errorLines,
+	showDescription,
+} = useInputLabeling(props)
 
 watch(rows, () => {
 	if (rows.value && rows.value.length < 1) {

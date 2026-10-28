@@ -2,7 +2,7 @@
 	<button
 		v-if="link && !link.onlyMobile"
 		:data-notifications-trigger="link.panel === 'notifications' ? '' : null"
-		class="flex w-full h-7 cursor-pointer items-center rounded text-ink-gray-8 duration-300 ease-in-out focus:outline-none focus:transition-none focus-visible:rounded focus-visible:ring-2 focus-visible:ring-outline-gray-3"
+		class="flex w-full h-7 cursor-pointer items-center rounded-4 text-ink-gray-8 duration-300 ease-in-out focus:outline-none focus:transition-none focus-visible:rounded-4 focus-visible:ring-2 focus-visible:ring-outline-gray-3"
 		:class="
 			isActive ? 'bg-surface-elevation-3 shadow-sm' : 'hover:bg-surface-gray-2'
 		"
@@ -12,13 +12,9 @@
 			class="flex items-center w-full duration-300 ease-in-out group"
 			:class="isCollapsed ? 'p-1 relative' : 'px-2 py-1'"
 		>
-			<Tooltip
-				:text="__(link.label)"
-				placement="right"
-				:disabled="!isCollapsed"
-			>
+			<Tooltip :text="__(link.label)" side="right" :disabled="!isCollapsed">
 				<slot name="icon">
-					<span class="grid h-5 w-6 flex-shrink-0 place-items-center">
+					<span class="grid size-4 flex-shrink-0 place-items-center">
 						<component
 							:is="typeof link.icon === 'string' ? icons[link.icon] : link.icon"
 							class="h-4 w-4 stroke-1.5 text-ink-gray-8"
@@ -28,12 +24,12 @@
 			</Tooltip>
 			<Tooltip
 				:text="__(link.label)"
-				placement="right"
+				side="right"
 				:disabled="isCollapsed"
-				:hoverDelay="1.5"
+				:hoverDelay="1500"
 			>
 				<span
-					class="min-w-0 truncate text-sm leading-5 duration-300 ease-in-out"
+					class="min-w-0 truncate text-p-sm duration-300 ease-in-out"
 					:class="
 						isCollapsed
 							? 'ms-0 w-0 overflow-hidden opacity-0'
@@ -51,7 +47,7 @@
 			/>
 			<span
 				v-if="link.count && !isCollapsed"
-				class="!ms-auto block text-xs text-ink-gray-5"
+				class="!ms-auto block text-p-xs text-ink-gray-5"
 				:class="
 					isCollapsed && link.count > 9
 						? 'absolute top-[2px] end-0 bg-surface-base'
@@ -62,7 +58,7 @@
 			</span>
 			<div
 				v-if="showControls && !isCollapsed"
-				class="flex items-center gap-x-2 !ms-auto block text-xs text-ink-gray-5 group-hover:visible invisible"
+				class="flex items-center gap-x-2 !ms-auto block text-p-xs text-ink-gray-5 group-hover:visible invisible"
 			>
 				<component
 					:is="icons['Edit']"
@@ -88,6 +84,7 @@ import * as icons from 'lucide-vue-next'
 import { toggleNotifications } from '@/stores/notifications'
 import { useSettings } from '@/stores/settings'
 import type { SidebarLink } from '@/types'
+import { openExternal } from '@/utils/openExternal'
 
 const router = useRouter()
 const settingsStore = useSettings()
@@ -126,7 +123,7 @@ function handleClick(): void {
 		showContactForm.value = true
 	} else if (props.link.to) {
 		if (props.link.to.startsWith('http')) {
-			window.open(props.link.to, '_blank')
+			openExternal(props.link.to)
 			return
 		}
 		window.location.href = `/${props.link.to}`

@@ -11,9 +11,12 @@ export interface Resource<T = unknown> {
 	reload(): Promise<T>
 	fetch(): Promise<T>
 	next?(): void
-	submit(params?: unknown, opts?: unknown): void
+	// Promise, not void: frappe-ui's submit resolves or REJECTS, and typing it
+	// away is what let bare `resource.submit(...)` statements spread unnoticed —
+	// see utils/resource.ts.
+	submit(params?: unknown, opts?: unknown): Promise<T>
 	update(opts: unknown): void
-	setValue: { submit(values: unknown, opts?: unknown): void }
+	setValue: { submit(values: unknown, opts?: unknown): Promise<T> }
 }
 
 export interface UserInfo {
@@ -31,12 +34,15 @@ export interface SessionUser {
 	data?: UserInfo & {
 		is_moderator?: boolean
 		is_instructor?: boolean
+		is_evaluator?: boolean
 		is_student?: boolean
 		is_system_manager?: boolean
 	}
 }
 
-export interface CourseInstructorInfo extends UserInfo {
+// `name` is the login email, sent only to the instructor themselves.
+export interface CourseInstructorInfo extends Omit<UserInfo, 'name'> {
+	name?: string
 	instructor?: string
 	bio?: string | null
 }
@@ -63,8 +69,12 @@ export interface CourseDetails
 
 export interface BatchDetails extends Omit<LMSBatch, 'instructors'> {
 	instructors: string[]
-	students?: string[]
+	student_count?: number
+	is_student?: boolean
 	batch_details_raw?: string
+	/** A listed instructor of this batch, or a Moderator: the server refuses
+	 * instructor-list changes from anyone else, a tagged evaluator included. */
+	can_change_instructors?: boolean
 }
 
 export interface CourseReviewInfo {
@@ -81,6 +91,7 @@ export interface OutlineLesson {
 	number: string
 	icon?: string
 	is_complete?: boolean
+	locked?: 0 | 1
 }
 
 export interface OutlineChapter {
@@ -93,7 +104,15 @@ export interface OutlineChapter {
 }
 
 export interface CertificationInfo {
-	certificate?: { name: string; template: string } | null
+	title?: string | null
+	has_evaluator?: boolean
+	// The evaluator's login email, sent only to the evaluator themselves.
+	evaluator?: string | null
+	certificate?: {
+		name: string
+		template: string
+		issue_date?: string
+	} | null
 	membership?: {
 		purchased_certificate?: 0 | 1
 		certificate?: string
@@ -105,7 +124,16 @@ export interface ChapterDetailInput {
 	name?: string
 	title?: string
 	is_scorm_package?: 0 | 1
-	scorm_package?: { file_name: string; file_size: number } | null
+	/**
+	 * build_outline expands this into the File's details only while that File row
+	 * still exists; once it is deleted the raw Course Chapter.scorm_package
+	 * DOCNAME comes through instead. Declaring only the object shape made every
+	 * consumer assume `.file_name` was there.
+	 */
+	scorm_package?:
+		| string
+		| { name?: string; file_name?: string; file_size?: number }
+		| null
 }
 
 export interface CourseFormMeta {

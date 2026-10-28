@@ -1,24 +1,26 @@
 <template>
 	<div class="p-5">
-		<div
-			v-if="isAdmin() && !hasProviderAccount()"
-			class="flex lg:items-center gap-x-2 mb-5 bg-surface-amber-1 px-3 py-2 rounded-lg text-ink-amber-6"
-		>
-			<span class="lucide-alert-circle size-7 md:size-4" />
-			<span class="leading-5">
-				{{
-					__(
-						'Please select a conferencing provider and add an account to the batch to create live classes.'
-					)
-				}}
-			</span>
-		</div>
+		<Alert
+			v-if="canManageClasses() && !hasProviderAccount()"
+			theme="amber"
+			class="mb-5"
+			:title="__('No conferencing account')"
+			:description="
+				__(
+					'Please select a conferencing provider and add an account to the batch to create live classes.'
+				)
+			"
+		/>
 
 		<div class="flex items-center justify-between">
 			<div class="text-lg-semibold text-ink-gray-9">
 				{{ __('Live Class') }}
 			</div>
-			<Button v-if="canCreateClass()" @click="openLiveClassModal">
+			<Button
+				v-if="canCreateClass()"
+				data-testid="live-class-add"
+				@click="openLiveClassForm"
+			>
 				<template #prefix>
 					<span class="lucide-plus h-4 w-4" />
 				</template>
@@ -31,14 +33,10 @@
 			v-if="liveClasses.data?.length"
 			class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mt-5"
 		>
-			<!-- TODO(a11y): this card is click-activated (opens attendance modal)
-			     but contains nested Start/Join anchors, so it can't become a
-			     <button>. Needs a redesign (dedicated action button) to be
-			     keyboard-accessible; left as-is to avoid invalid nesting. -->
 			<div
 				v-for="cls in liveClasses.data"
 				:key="cls.name"
-				class="flex flex-col border rounded-md h-full text-ink-gray-7 hover:border-outline-gray-3 p-3"
+				class="flex flex-col border rounded-5 h-full text-ink-gray-7 hover:border-outline-gray-3 p-3"
 				:class="{
 					'cursor-pointer': isAdmin() && cls.attendees > 0,
 				}"
@@ -69,23 +67,43 @@
 						</span>
 					</div>
 					<div
+						v-if="canManageClasses() && cls.invite_status === 'Failed'"
+						class="flex items-center justify-between gap-2"
+					>
+						<div class="flex items-center gap-x-2 text-ink-amber-4">
+							<span class="lucide-circle-alert w-4 h-4" />
+							<span>{{ __('Invites not sent') }}</span>
+						</div>
+						<Button
+							size="sm"
+							:loading="isRetrying(cls)"
+							@click.stop="retryClassInvites(cls)"
+						>
+							{{ __('Retry') }}
+						</Button>
+					</div>
+					<div
 						v-if="canAccessClass(cls) && cls.join_url"
 						class="flex items-center gap-x-2 text-ink-gray-9 mt-auto"
 					>
 						<a
-							v-if="user.data?.is_moderator || user.data?.is_evaluator"
-							:href="cls.start_url || cls.join_url"
-							target="_blank"
-							class="cursor-pointer inline-flex items-center justify-center gap-2 transition-colors focus:outline-none text-ink-gray-8 bg-surface-gray-2 hover:bg-surface-gray-3 active:bg-surface-gray-4 focus-visible:ring focus-visible:ring-outline-gray-3 h-7 text-base px-2 rounded"
+							v-if="
+								user.data?.is_moderator ||
+								user.data?.is_evaluator ||
+								batch.data?.can_manage
+							"
+							:href="safeUrl(startUrl(cls))"
+							v-external
+							class="cursor-pointer inline-flex items-center justify-center gap-2 transition-colors text-ink-gray-8 bg-surface-gray-2 hover:bg-surface-gray-3 active:bg-surface-gray-4 h-7 text-base px-2 rounded-4"
 							:class="cls.join_url ? 'w-full' : 'w-1/2'"
 						>
 							<span class="lucide-monitor h-4 w-4" />
 							{{ __('Start') }}
 						</a>
 						<a
-							:href="cls.join_url"
-							target="_blank"
-							class="w-full cursor-pointer inline-flex items-center justify-center gap-2 transition-colors focus:outline-none text-ink-gray-8 bg-surface-gray-2 hover:bg-surface-gray-3 active:bg-surface-gray-4 focus-visible:ring focus-visible:ring-outline-gray-3 h-7 text-base px-2 rounded"
+							:href="safeUrl(cls.join_url)"
+							v-external
+							class="w-full cursor-pointer inline-flex items-center justify-center gap-2 transition-colors text-ink-gray-8 bg-surface-gray-2 hover:bg-surface-gray-3 active:bg-surface-gray-4 h-7 text-base px-2 rounded-4"
 						>
 							<span class="lucide-video h-4 w-4" />
 							{{ __('Join') }}
@@ -94,9 +112,9 @@
 					<Tooltip
 						v-else-if="hasClassEnded(cls)"
 						:text="__('This class has ended')"
-						placement="right"
+						side="right"
 					>
-						<div class="flex items-center gap-x-2 text-ink-amber-6 w-fit">
+						<div class="flex items-center gap-x-2 text-ink-amber-5 w-fit">
 							<span class="lucide-info w-4 h-4" />
 							<span>
 								{{ __('Ended') }}
@@ -111,16 +129,6 @@
 		</div>
 	</div>
 
-	<LiveClassModal
-		v-if="showLiveClassModal"
-		v-model="showLiveClassModal"
-		:batch="batch.data?.name"
-		:zoomAccount="batch.data?.zoom_account"
-		:googleMeetAccount="batch.data?.google_meet_account"
-		:conferencingProvider="batch.data?.conferencing_provider"
-		v-model:reloadLiveClasses="liveClasses"
-	/>
-
 	<LiveClassAttendance
 		v-if="showAttendance"
 		v-model="showAttendance"
@@ -128,14 +136,28 @@
 	/>
 </template>
 <script setup>
-import { createListResource, Button, Tooltip } from 'frappe-ui'
+// TODO(a11y): the class card is click-activated — it opens the attendance
+// modal — but carries nested Start/Join anchors, so it cannot become a
+// <button> without invalid nesting. Reaching it by keyboard needs a dedicated
+// action control, which is a redesign rather than an attribute.
+import {
+	Alert,
+	createListResource,
+	createResource,
+	Button,
+	Tooltip,
+	toast,
+} from 'frappe-ui'
 import { inject, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { formatTime } from '@/utils/'
-import LiveClassModal from '@/components/Modals/LiveClassModal.vue'
+import { openBatchForm } from '@/composables/useBatchForms'
 import LiveClassAttendance from '@/components/Modals/LiveClassAttendance.vue'
+import { safeUrl } from '@/utils/safeUrl'
 
 const user = inject('$user')
-const showLiveClassModal = ref(false)
+const route = useRoute()
+const router = useRouter()
 const dayjs = inject('$dayjs')
 const readOnlyMode = window.read_only_mode
 const showAttendance = ref(false)
@@ -148,12 +170,18 @@ const props = defineProps({
 	},
 })
 
+// The `cache` key is what lets LiveClassForm refresh this list after a create
+// without a prop or a defineModel between them: it looks the instance up by
+// this exact key (getCachedListResource) rather than constructing one, so the
+// options below stay authoritative. Keep the key in step with the form's.
 const liveClasses = createListResource({
 	doctype: 'LMS Live Class',
+	cache: ['liveClasses', props.batch.data?.name],
 	filters: {
 		batch_name: props.batch.data?.name,
 	},
 	fields: [
+		'name',
 		'title',
 		'description',
 		'time',
@@ -165,13 +193,46 @@ const liveClasses = createListResource({
 		'owner',
 		'conferencing_provider',
 		'batch_name',
+		'invite_status',
 	],
 	orderBy: 'date',
 	auto: true,
 })
 
-const openLiveClassModal = () => {
-	showLiveClassModal.value = true
+// A class is Failed once Google Calendar has refused its learners' invites on
+// every automatic retry; the hosts get a notification pointing here.
+const retryInvites = createResource({
+	url: 'lms.lms.doctype.lms_live_class.lms_live_class.retry_invites',
+})
+
+const isRetrying = (cls) =>
+	retryInvites.loading && retryInvites.params?.live_class === cls.name
+
+const retryClassInvites = (cls) => {
+	retryInvites.submit(
+		{ live_class: cls.name },
+		{
+			onSuccess(sent) {
+				if (!sent) {
+					toast.error(
+						__(
+							"Google Calendar still isn't responding. Try again in a few minutes."
+						)
+					)
+					return
+				}
+				toast.success(__('Invites sent'))
+				liveClasses.reload()
+			},
+			onError(err) {
+				toast.error(err.messages?.[0] || err)
+			},
+		}
+	)
+}
+
+const openLiveClassForm = () => {
+	openBatchForm(router, 'NewLiveClass', props.batch.data?.name, route.hash)
 }
 
 const hasProviderAccount = () => {
@@ -185,15 +246,32 @@ const hasProviderAccount = () => {
 	return false
 }
 
+// Moderators and the batch's instructors: the only users the server lets
+// create a class or retry its invites. isAdmin also takes in every evaluator,
+// who would only get a permission error.
+const canManageClasses = () =>
+	Boolean(user.data?.is_moderator || props.batch.data?.can_schedule_classes)
+
 const canCreateClass = () => {
 	if (readOnlyMode) return false
 	if (!hasProviderAccount()) return false
-	return isAdmin()
+	return canManageClasses()
 }
 
 const isAdmin = () => {
-	return user.data?.is_moderator || user.data?.is_evaluator
+	return (
+		user.data?.is_moderator ||
+		user.data?.is_evaluator ||
+		Boolean(props.batch.data?.can_manage)
+	)
 }
+
+// The start link is not sent to every instructor, so Start goes through the
+// server, which opens the class for the batch's staff.
+const startUrl = (cls) =>
+	`/api/method/lms.lms.api.start_live_class?live_class=${encodeURIComponent(
+		cls.name
+	)}`
 
 const canAccessClass = (cls) => {
 	if (cls.date < dayjs().format('YYYY-MM-DD')) return false

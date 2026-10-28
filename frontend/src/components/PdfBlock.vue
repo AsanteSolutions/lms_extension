@@ -12,7 +12,7 @@
 					<ChevronLeft :size="18" :stroke-width="1.5" />
 				</button>
 				<span class="pdf-page-indicator">{{
-					numPages ? currentPage + ' / ' + numPages : '—'
+					numPages ? currentPage + ' / ' + numPages : '-'
 				}}</span>
 				<button
 					type="button"
@@ -54,9 +54,8 @@
 				</button>
 				<a
 					class="pdf-btn"
-					:href="file"
-					target="_blank"
-					rel="noopener"
+					:href="safeUrl(file)"
+					v-external
 					aria-label="Open in new tab"
 				>
 					<ExternalLink :size="16" :stroke-width="1.5" />
@@ -71,12 +70,7 @@
 			</div>
 			<div v-else-if="error" class="pdf-status pdf-error">
 				<span>{{ error }}</span>
-				<a
-					class="pdf-fallback-link"
-					:href="file"
-					target="_blank"
-					rel="noopener"
-				>
+				<a class="pdf-fallback-link" :href="safeUrl(file)" v-external>
 					Open the PDF in a new tab
 				</a>
 			</div>
@@ -109,12 +103,13 @@ import {
 	ExternalLink,
 	Loader2,
 } from 'lucide-vue-next'
+import { safeUrl } from '@/utils/safeUrl'
 
 const props = defineProps({
 	file: { type: String, required: true },
 })
 
-// iOS Safari blanks a canvas past its area/memory limit — pdf.js's own failure
+// iOS Safari blanks a canvas past its area/memory limit: pdf.js's own failure
 // mode on large or high-DPI pages. Cap the backing store to pdf.js's default.
 const MAX_CANVAS_PIXELS = 16_777_216
 const MIN_SCALE = 0.25
@@ -162,7 +157,7 @@ async function load() {
 		// GlobalWorkerOptions.workerPort, pdf.js hands each loading task
 		// ownership of the shared worker, so one viewer's pdfDoc.destroy()
 		// tears down the port-level message handler every *sibling* viewer is
-		// still listening on — their getDocument() then never settles and the
+		// still listening on. Their getDocument() then never settles and the
 		// spinner runs forever. Passing `worker` keeps ownership here.
 		if (sharedWorker && !sharedPdfWorker) {
 			sharedPdfWorker = new pdfjsLib.PDFWorker({ port: sharedWorker })
@@ -170,7 +165,7 @@ async function load() {
 
 		const base = import.meta.env.BASE_URL || '/'
 		const loadingTask = pdfjsLib.getDocument({
-			url: props.file,
+			url: safeUrl(props.file),
 			worker: sharedPdfWorker || undefined,
 			cMapUrl: `${base}pdfjs/cmaps/`,
 			cMapPacked: true,
@@ -207,7 +202,7 @@ async function load() {
 	}
 }
 
-// Synchronous so the ref is taken at mount, before load()'s first await — the
+// Synchronous so the ref is taken at mount, before load()'s first await. The
 // GlobalWorkerOptions.workerPort wiring happens later in load() once pdf.js is
 // imported. pdf.js falls back to its main-thread worker if none is available.
 function acquireWorker() {
@@ -412,10 +407,10 @@ let sharedPdfWorker = null
 
 <style scoped>
 .pdf-block {
-	border: 1px solid var(--gray-200, #e5e7eb);
+	border: 1px solid var(--outline-gray-2);
 	border-radius: 8px;
 	overflow: hidden;
-	background: var(--gray-50, #f9fafb);
+	background: var(--surface-gray-1);
 }
 .pdf-toolbar {
 	display: flex;
@@ -423,8 +418,8 @@ let sharedPdfWorker = null
 	justify-content: space-between;
 	gap: 8px;
 	padding: 6px 8px;
-	border-bottom: 1px solid var(--gray-200, #e5e7eb);
-	background: var(--white, #fff);
+	border-bottom: 1px solid var(--outline-gray-2);
+	background: var(--surface-base);
 }
 .pdf-toolbar-group {
 	display: flex;
@@ -439,13 +434,13 @@ let sharedPdfWorker = null
 	min-width: 28px;
 	padding: 0 6px;
 	border-radius: 6px;
-	color: var(--gray-700, #374151);
+	color: var(--ink-gray-7);
 	background: transparent;
 	cursor: pointer;
 	border: none;
 }
 .pdf-btn:hover:not(:disabled) {
-	background: var(--gray-100, #f3f4f6);
+	background: var(--surface-gray-2);
 }
 .pdf-btn:disabled {
 	opacity: 0.4;
@@ -455,7 +450,7 @@ let sharedPdfWorker = null
 	min-width: 56px;
 	text-align: center;
 	font-size: 13px;
-	color: var(--gray-700, #374151);
+	color: var(--ink-gray-7);
 	font-variant-numeric: tabular-nums;
 }
 .pdf-scroll {
@@ -472,8 +467,10 @@ let sharedPdfWorker = null
 	-webkit-overflow-scrolling: touch;
 }
 .pdf-page {
-	background: var(--white, #fff);
-	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+	/* The page substrate is paper, white in either theme; the canvas pdf.js
+	   draws covers it entirely once the page has rendered. */
+	background: #fff; /* token-exempt: paper */
+	box-shadow: var(--elevation-sm);
 	flex: 0 0 auto;
 }
 .pdf-page canvas {
@@ -484,7 +481,7 @@ let sharedPdfWorker = null
 	align-items: center;
 	gap: 8px;
 	padding: 40px 12px;
-	color: var(--gray-600, #4b5563);
+	color: var(--ink-gray-6);
 	font-size: 14px;
 }
 .pdf-error {
@@ -492,7 +489,7 @@ let sharedPdfWorker = null
 }
 .pdf-fallback-link,
 .pdf-status a {
-	color: var(--blue-600, #2563eb);
+	color: var(--ink-blue-5);
 	text-decoration: underline;
 }
 .pdf-spin {

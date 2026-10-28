@@ -4,7 +4,7 @@
 			<h2 class="text-ink-gray-9 font-semibold">
 				{{ __('Assessments') }}
 			</h2>
-			<Button v-if="canAddAssessments()" @click="showModal = true">
+			<Button v-if="canAddAssessments()" @click="openAssessmentForm()">
 				<template #prefix>
 					<span class="lucide-plus h-4 w-4" />
 				</template>
@@ -12,103 +12,63 @@
 			</Button>
 		</div>
 		<div v-if="assessments.data?.length" class="text-sm">
-			<ListView
-				:columns="getAssessmentColumns()"
+			<ResponsiveListView
+				:columns="assessmentColumns"
 				:rows="assessments.data"
 				row-key="name"
-				class="border rounded-lg"
-				:options="{
-					showTooltip: false,
-					getRowRoute: (row) => getRowRoute(row),
-					selectable: user.data?.is_student ? false : true,
-				}"
+				class="sm:border sm:rounded-6"
+				:options="listOptions"
 			>
-				<ListHeader
-					class="mb-2 grid items-center gap-x-4 rounded-t-lg bg-surface-gray-2 p-2"
-				>
-					<ListHeaderItem
-						:item="item"
-						v-for="item in getAssessmentColumns()"
-						:key="item.key"
+				<template #cell="{ column, value }">
+					<span v-if="column.key == 'assessment_type'">
+						{{ getAssessmentTypeLabel(value) }}
+					</span>
+					<Badge
+						v-else-if="column.key == 'status' && isNaN(value)"
+						:theme="getStatusTheme(value)"
 					>
-					</ListHeaderItem>
-				</ListHeader>
-				<ListRows>
-					<ListRow
-						:row="row"
-						v-for="row in assessments.data"
-						:key="row.name"
-						class="!rounded-none last:!rounded-b-lg"
+						{{ value }}
+					</Badge>
+					<span v-else>{{ value }}</span>
+				</template>
+				<template #selection-actions="{ unselectAll, selections }">
+					<Button
+						variant="ghost"
+						:label="__('Delete')"
+						@click="removeAssessments(selections, unselectAll)"
 					>
-						<template #default="{ column, item }">
-							<ListRowItem :item="row[column.key]" :align="column.align">
-								<div v-if="column.key == 'assessment_type'">
-									{{ getAssessmentTypeLabel(row[column.key]) }}
-								</div>
-								<div v-else-if="column.key == 'title'">
-									{{ row[column.key] }}
-								</div>
-								<div v-else-if="isNaN(row[column.key])">
-									<Badge :theme="getStatusTheme(row[column.key])">
-										{{ row[column.key] }}
-									</Badge>
-								</div>
-								<div v-else>
-									{{ row[column.key] }}
-								</div>
-							</ListRowItem>
+						<template #icon>
+							<span class="lucide-trash-2 size-4" />
 						</template>
-					</ListRow>
-				</ListRows>
-				<ListSelectBanner class="!min-w-0">
-					<template #actions="{ unselectAll, selections }">
-						<div class="flex gap-2">
-							<Button
-								variant="ghost"
-								:label="__('Delete')"
-								@click="removeAssessments(selections, unselectAll)"
-							>
-								<span class="lucide-trash-2 h-4 w-4" />
-							</Button>
-						</div>
-					</template>
-				</ListSelectBanner>
-			</ListView>
+					</Button>
+				</template>
+			</ResponsiveListView>
 		</div>
 		<div v-else class="text-ink-gray-7">
 			{{ __('No assessments added to this batch') }}
 		</div>
 	</div>
-	<AssessmentModal
-		v-model="showModal"
-		v-model:assessments="assessments"
-		:batch="props.batch"
-	/>
 </template>
 <script setup>
-import {
-	ListView,
-	ListRow,
-	ListRows,
-	ListHeader,
-	ListHeaderItem,
-	ListRowItem,
-	ListSelectBanner,
-	createResource,
-	Button,
-	Badge,
-} from 'frappe-ui'
-import { inject, ref } from 'vue'
-import AssessmentModal from '@/components/Modals/AssessmentModal.vue'
+import { createResource, Button, Badge } from 'frappe-ui'
+import { computed, inject } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { openBatchForm } from '@/composables/useBatchForms'
+import ResponsiveListView from '@/components/ResponsiveListView.vue'
 
 const user = inject('$user')
-const showModal = ref(false)
 const readOnlyMode = window.read_only_mode
 
 const props = defineProps({
 	batch: {
 		type: String,
 		required: true,
+	},
+	// Per-batch: a Course Creator only manages a batch they author, unlike the
+	// session-wide user.data.is_instructor.
+	canManage: {
+		type: Boolean,
+		default: false,
 	},
 	rows: {
 		type: Array,
@@ -132,7 +92,17 @@ const assessments = createResource({
 		batch: props.batch,
 	},
 	auto: true,
+	// Named so AssessmentForm can reload it through getCachedResource after
+	// inserting. Keyed by batch, because BatchDetail is per-batch.
+	cache: ['batchAssessments', props.batch],
 })
+
+const route = useRoute()
+const router = useRouter()
+
+const openAssessmentForm = () => {
+	openBatchForm(router, 'NewAssessment', props.batch, route.hash)
+}
 
 const deleteAssessments = createResource({
 	url: 'lms.lms.api.delete_documents',
@@ -205,10 +175,10 @@ const getRowRoute = (row) => {
 
 const canAddAssessments = () => {
 	if (readOnlyMode) return false
-	return user.data?.is_moderator || user.data?.is_evaluator
+	return user.data?.is_moderator || user.data?.is_evaluator || props.canManage
 }
 
-const getAssessmentColumns = () => {
+const assessmentColumns = computed(() => {
 	let columns = [
 		{
 			label: __('Assessment'),
@@ -230,13 +200,19 @@ const getAssessmentColumns = () => {
 		})
 	}
 	return columns
-}
+})
+
+const listOptions = computed(() => ({
+	showTooltip: false,
+	getRowRoute: (row) => getRowRoute(row),
+	selectable: user.data?.is_student ? false : true,
+}))
 
 const getStatusTheme = (status) => {
 	if (status === 'Pass' || status === 'Passed') {
 		return 'green'
 	} else if (status === 'Not Graded') {
-		return 'orange'
+		return 'amber'
 	} else {
 		return 'red'
 	}

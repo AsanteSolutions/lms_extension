@@ -1,7 +1,7 @@
 <template>
 	<div>
 		<div
-			class="relative overflow-x-auto border border-outline-gray-2 rounded-md"
+			class="relative overflow-x-auto border border-outline-gray-2 rounded-5"
 		>
 			<table class="w-full text-sm text-start text-ink-gray-5">
 				<thead
@@ -74,7 +74,7 @@ import Link from '@/components/Controls/Link.vue'
 import Select from '@/components/Controls/Select.vue'
 
 // Mutates the parent doc's `applicable_items` in place; the parent saves the whole
-// doc, so Frappe diffs rows server-side — no per-row API calls here.
+// doc, so Frappe diffs rows server-side; no per-row API calls here.
 const props = defineProps<{
 	items: ApplicableItem[]
 }>()

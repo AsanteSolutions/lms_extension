@@ -4,6 +4,7 @@
 		:title="__('All Batches')"
 		:rows="batches.data || []"
 		:loading="batches.list.loading"
+		:total-count="batchCount"
 		:has-next-page="batches.hasNextPage"
 		v-model:page-length="pageLength"
 		empty-name="Batches"
@@ -11,64 +12,31 @@
 		@load-more="batches.next()"
 	>
 		<template #actions>
-			<Dropdown
-				v-if="canCreateBatch()"
-				:options="[
-					{
-						label: __('New Batch'),
-						icon: 'lucide-users',
-						onClick() {
-							showBatchModal = true
-						},
-					},
-					{
-						label: __('Import Batch'),
-						icon: 'lucide-upload',
-						onClick() {
-							router.push({
-								name: 'NewDataImport',
-								params: { doctype: 'LMS Batch' },
-							})
-						},
-					},
-				]"
-			>
-				<template v-slot="{ open }">
-					<Button variant="solid">
-						<template #prefix>
-							<span class="lucide-plus size-4" />
-						</template>
-						{{ __('Create') }}
-						<template #suffix>
-							<span
-								:class="[
-									'lucide-chevron-down ms-1 size-4 transform transition-transform',
-									open ? 'rotate-180' : '',
-								]"
-							/>
-						</template>
-					</Button>
-				</template>
-			</Dropdown>
+			<div v-if="canCreateBatch()" class="flex items-center gap-2">
+				<Button variant="subtle" @click="openBatchImport">
+					{{ __('Import') }}
+				</Button>
+				<Button variant="solid" @click="openNewBatch">
+					<template #prefix>
+						<span class="lucide-plus size-4" />
+					</template>
+					{{ __('New Batch') }}
+				</Button>
+			</div>
 		</template>
 
-		<template #tabs>
+		<template #filters>
 			<TabButtons
 				v-if="user.data"
 				:options="batchTabs"
 				v-model="currentTab"
-				class="w-fit"
+				class="!w-fit shrink-0"
 			/>
-		</template>
-
-		<template #filters>
 			<FormControl
 				v-model="title"
 				:placeholder="__('Search')"
 				:aria-label="__('Search')"
 				type="text"
-				class="w-full sm:min-w-40"
-				@input="updateBatches()"
 			>
 				<template #prefix>
 					<span class="lucide-search size-4 text-ink-gray-5" />
@@ -79,12 +47,8 @@
 				v-model="currentCategory"
 				:options="categories.filter((c) => c.value)"
 				:placeholder="__('Category')"
-				class="w-full sm:w-auto"
 				@update:modelValue="updateBatches()"
 			/>
-		</template>
-
-		<template #toggles>
 			<ToggleFilter
 				:modelValue="certification"
 				:label="__('Certification')"
@@ -103,17 +67,13 @@
 		</template>
 	</ListPage>
 
-	<NewBatchModal
-		v-if="showBatchModal"
-		v-model="showBatchModal"
-		:batches="batches"
-	/>
+	<router-view />
 </template>
 <script setup>
 import {
 	Button,
 	createListResource,
-	Dropdown,
+	createResource,
 	FormControl,
 	TabButtons,
 	usePageMeta,
@@ -125,7 +85,8 @@ import { useRouter } from 'vue-router'
 import { sessionStore } from '@/stores/session'
 import BatchCard from '@/pages/Batches/components/BatchCard.vue'
 import ListPage from '@/components/Layouts/ListPage.vue'
-import NewBatchModal from '@/pages/Batches/components/NewBatchModal.vue'
+import { openFormRoute } from '@/composables/useFormRoute'
+import { setFormSource } from '@/composables/formTracking'
 
 const user = inject('$user')
 const dayjs = inject('$dayjs')
@@ -141,11 +102,12 @@ const currentTab = ref(is_student.value ? 'all' : 'upcoming')
 const orderBy = ref('start_date')
 const readOnlyMode = window.read_only_mode
 const router = useRouter()
-const showBatchModal = ref(false)
 
 onMounted(() => {
 	setFiltersFromQuery()
 	updateBatches()
+	// TextInput emits on input and change; watched after query hydration to avoid a refetch.
+	watch(title, () => updateBatches())
 	categories.value = [
 		{
 			label: '',
@@ -195,6 +157,19 @@ const setCategories = (data) => {
 	}
 }
 
+// Upcoming and Archived are settled against the current time in Python rather
+// than in the query, and `enrolled` is not a field, so only the endpoint that
+// resolves both can say how many batches a tab really holds.
+const batchCountResource = createResource({
+	url: 'lms.lms.utils.get_batch_count',
+	makeParams: () => ({ filters: filters.value }),
+	onError: (error) => {
+		console.error(error)
+	},
+})
+
+const batchCount = computed(() => batchCountResource.data ?? null)
+
 const updateBatches = () => {
 	updateFilters()
 	batches.update({
@@ -204,6 +179,10 @@ const updateBatches = () => {
 	batches.reload().then((data) => {
 		setCategories(data)
 	})
+	// Nothing orders the responses, so a slow count for a tab the user has
+	// left would overwrite the current one.
+	batchCountResource.abort()
+	batchCountResource.submit()
 }
 
 const updateFilters = () => {
@@ -338,14 +317,17 @@ const batchTabs = computed(() => {
 
 const canCreateBatch = () => {
 	if (readOnlyMode) return false
-	if (
-		user.data?.is_moderator ||
-		user.data?.is_instructor ||
-		user.data?.is_evaluator
-	)
-		return true
-	return false
+	return Boolean(user.data?.is_moderator || user.data?.is_evaluator)
 }
+
+// openFormRoute, not a bare router.push: it stamps the history entry so the
+// form's own close() pops it instead of replacing.
+const openNewBatch = () => {
+	setFormSource('header_button')
+	openFormRoute(router, { name: 'NewBatch' })
+}
+const openBatchImport = () =>
+	router.push({ name: 'NewDataImport', params: { doctype: 'LMS Batch' } })
 
 const breadcrumbs = computed(() => [
 	{

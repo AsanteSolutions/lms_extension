@@ -1,21 +1,32 @@
 <template>
 	<div class="flex flex-col h-full">
-		<div class="bg-surface-gray-1 px-5 py-5 border-b">
-			<div class="text-lg-semibold text-ink-gray-9 leading-snug">
+		<div
+			v-if="!hideHeader || withProgress"
+			class="bg-surface-gray-1 px-5 py-5 border-b"
+		>
+			<div
+				v-if="!hideHeader"
+				class="text-lg-semibold text-ink-gray-9 leading-snug"
+			>
 				{{ courseTitle }}
 			</div>
-			<div class="mt-4 flex items-center gap-2 text-sm text-ink-gray-7">
-				<Cloud class="size-4 stroke-1.5" />
-				<span>{{ __('Completed') }} {{ displayedProgress }}%</span>
-			</div>
-			<div
-				class="h-1 w-full rounded-full bg-surface-gray-2 overflow-hidden mt-2"
-			>
+			<template v-if="withProgress">
 				<div
-					class="h-full bg-surface-green-3 transition-all"
-					:style="{ width: `${displayedProgress}%` }"
-				/>
-			</div>
+					class="flex items-center gap-2 text-sm text-ink-gray-7"
+					:class="{ 'mt-4': !hideHeader }"
+				>
+					<Cloud class="size-4 stroke-1.5" />
+					<span>{{ __('Completed') }} {{ displayedProgress }}%</span>
+				</div>
+				<div
+					class="h-1 w-full rounded-full bg-surface-gray-2 overflow-hidden mt-2"
+				>
+					<div
+						class="h-full bg-surface-gray-10 transition-all"
+						:style="{ width: `${displayedProgress}%` }"
+					/>
+				</div>
+			</template>
 		</div>
 
 		<ul class="flex-1 overflow-y-auto px-2 py-3 list-none">
@@ -25,7 +36,7 @@
 					:defaultOpen="chapterDefaultOpen(chapter)"
 				>
 					<DisclosureButton
-						class="w-full flex items-center justify-between rounded px-3 py-2 hover:bg-surface-gray-2 text-start"
+						class="w-full flex items-center justify-between rounded-4 px-3 py-2 hover:bg-surface-gray-2 text-start"
 					>
 						<div
 							class="flex items-center gap-2 text-base-medium leading-5 text-ink-gray-9 min-w-0"
@@ -47,10 +58,16 @@
 						<ul class="list-none">
 							<li v-for="lesson in chapter.lessons || []" :key="lesson.name">
 								<component
-									:is="inlineSelect ? 'button' : 'router-link'"
-									:type="inlineSelect ? 'button' : undefined"
+									:is="
+										lesson.locked
+											? 'div'
+											: inlineSelect
+											? 'button'
+											: 'router-link'
+									"
+									:type="!lesson.locked && inlineSelect ? 'button' : undefined"
 									:to="
-										inlineSelect
+										lesson.locked || inlineSelect
 											? undefined
 											: {
 													name: 'Lesson',
@@ -62,32 +79,40 @@
 													query: studentViewQuery,
 											  }
 									"
-									class="flex w-full items-center gap-3 rounded ps-9 pe-3 py-2 text-start text-sm leading-5 text-ink-gray-8 hover:bg-surface-gray-2"
+									class="flex w-full items-center gap-3 rounded-4 ps-9 pe-3 py-2 text-start text-sm leading-5 text-ink-gray-8 hover:bg-surface-gray-2"
 									:class="[
-										inlineSelect ? 'cursor-pointer' : '',
+										lesson.locked
+											? 'cursor-not-allowed opacity-60'
+											: inlineSelect
+											? 'cursor-pointer'
+											: '',
 										isActive(lesson.number)
 											? 'bg-surface-gray-2 text-ink-gray-9'
 											: '',
 									]"
-									@click="
-										inlineSelect &&
-											emit('select-lesson', {
-												chapterNumber: lesson.number.split('-')[0],
-												lessonNumber: lesson.number.split('-')[1],
-											})
-									"
+									@click="onLessonClick(lesson)"
 								>
 									<component
 										:is="iconFor(lesson.icon)"
 										class="size-4 stroke-1.5 shrink-0 text-ink-gray-7"
 									/>
 									<span class="truncate flex-1">{{ lesson.title }}</span>
+									<template v-if="lesson.locked">
+										<Tooltip :text="lockReason">
+											<LockKeyhole
+												class="size-4 stroke-1.5 shrink-0 text-ink-gray-4"
+												aria-hidden="true"
+											/>
+										</Tooltip>
+										<span class="sr-only">{{ __('Locked') }}</span>
+										<span class="sr-only">{{ lockReason }}</span>
+									</template>
 									<CircleCheck
-										v-if="lesson.is_complete"
-										class="size-4 stroke-1.5 shrink-0 text-green-700 fill-none"
+										v-else-if="withProgress && lesson.is_complete"
+										class="size-4 stroke-1.5 shrink-0 text-ink-green-8 fill-none"
 									/>
 									<Circle
-										v-else
+										v-else-if="withProgress"
 										class="size-4 stroke-1.5 shrink-0 text-ink-gray-4"
 									/>
 								</component>
@@ -103,7 +128,7 @@
 <script setup>
 import { computed, watch, watchEffect } from 'vue'
 import { useRoute } from 'vue-router'
-import { createResource } from 'frappe-ui'
+import { createResource, Tooltip } from 'frappe-ui'
 import { Disclosure, DisclosureButton, DisclosurePanel } from '@headlessui/vue'
 import {
 	ChevronDown,
@@ -126,6 +151,7 @@ const props = defineProps({
 	completedLesson: { type: String, default: null },
 	inlineSelect: { type: Boolean, default: false },
 	withProgress: { type: Boolean, default: true },
+	hideHeader: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['select-lesson'])
@@ -150,12 +176,14 @@ const outline = createResource({
 			progress: props.withProgress,
 		}
 	},
-	auto: true,
+	auto: Boolean(props.courseName),
 })
 
 watch(
 	() => props.courseName,
-	() => outline.reload()
+	() => {
+		if (props.courseName) outline.reload()
+	}
 )
 
 // Re-runs whenever either source updates so a completion event that
@@ -172,6 +200,10 @@ watchEffect(() => {
 		}
 	}
 })
+
+// Lessons unlock in course order: one stays locked while any earlier lesson is
+// incomplete (compute_locked_lessons).
+const lockReason = __('Complete the previous lessons to unlock this one')
 
 const displayedProgress = computed(() => Math.ceil(props.progress || 0))
 
@@ -194,6 +226,14 @@ function iconFor(icon) {
 
 function isActive(number) {
 	return props.selectedLessonNumber === number
+}
+
+function onLessonClick(lesson) {
+	if (lesson.locked) return
+	emit('select-lesson', {
+		chapterNumber: lesson.number.split('-')[0],
+		lessonNumber: lesson.number.split('-')[1],
+	})
 }
 
 function chapterDefaultOpen(chapter) {

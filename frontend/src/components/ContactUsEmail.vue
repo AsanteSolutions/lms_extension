@@ -8,15 +8,16 @@
 					type="text"
 					:required="true"
 				/>
-				<div>
-					<div class="mb-1.5 text-p-sm-medium text-ink-gray-7">
-						{{ __('Message') }}
-						<span class="text-ink-red-6">*</span>
-					</div>
+				<div class="space-y-1.5">
+					<InputLabel
+						:id="messageLabelId"
+						:label="__('Message')"
+						:required="true"
+					/>
 					<RichTextEditor
 						:fixedMenu="true"
 						@change="(val) => (message = val)"
-						editorClass="prose-sm py-2 px-2 min-h-[200px] border-outline-gray-2 hover:border-outline-gray-3 rounded-b-md bg-surface-gray-3"
+						editorClass="prose-sm py-2 px-2 min-h-[200px] border-outline-gray-2 hover:border-outline-gray-3 rounded-b-5 bg-surface-gray-3"
 					/>
 				</div>
 			</div>
@@ -32,21 +33,25 @@
 </template>
 <script setup lang="ts">
 import { Button, call, Dialog, FormControl, toast } from 'frappe-ui'
-import { ref } from 'vue'
-import { useSettings } from '@/stores/settings'
+import { ref, useId } from 'vue'
+import { InputLabel } from 'frappe-ui/experimental'
+import { resourceErrorMessage } from '@/utils/resource'
 import RichTextEditor from '@/components/RichTextEditor.vue'
+
+const messageLabelId = useId()
 
 const show = defineModel<boolean>({ required: true, default: false })
 const subject = ref('')
 const message = ref('')
-const settingsStore = useSettings()
 
+/* Sent server-side so the recipient comes from LMS Settings rather than the
+   request, and so an image pasted into the message is embedded into the mail
+   itself. Its upload is private, and a /private/files/ URL in an email is
+   served to nobody. */
 const sendMail = (close: Function) => {
-	call('frappe.core.doctype.communication.email.make', {
-		recipients: settingsStore.settings?.data?.contact_us_email,
+	call('lms.lms.api.send_contact_us_email', {
 		subject: subject.value,
 		content: message.value,
-		send_email: true,
 	})
 		.then(() => {
 			toast.success(__('Email sent successfully'))
@@ -54,9 +59,10 @@ const sendMail = (close: Function) => {
 			subject.value = ''
 			message.value = ''
 		})
-		.catch(() => {
-			toast.error(__('Failed to send email'))
-			close()
+		.catch((error: unknown) => {
+			// The dialog stays open: the message is worth keeping when the
+			// failure is something the sender can fix.
+			toast.error(resourceErrorMessage(error, __('Failed to send email')))
 		})
 }
 </script>

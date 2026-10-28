@@ -2,7 +2,7 @@
  * Student view is a mode carried in the URL (`?studentView=1`), not a
  * destination, so every hop that stays on a lesson has to preserve it. The
  * sidebar's lesson links dropped it, which silently returned a previewing
- * moderator to their own identity on the first click — grading panels and
+ * moderator to their own identity on the first click, with grading panels and
  * instructor notes reappearing mid-course with no visible cause.
  */
 import { mount, RouterLinkStub } from '@vue/test-utils'
@@ -32,7 +32,6 @@ vi.mock('frappe-ui', () => ({
 		reload: vi.fn(),
 		fetch: vi.fn(),
 	}),
-	Progress: { template: `<div />` },
 }))
 
 vi.mock('@headlessui/vue', () => ({

@@ -27,6 +27,7 @@
 							v-model="batchDetail.doc.start_date"
 							:label="__('Batch Start Date')"
 							type="date"
+							:format="dateFormat"
 							:required="true"
 							variant="outline"
 						/>
@@ -34,39 +35,34 @@
 							v-model="batchDetail.doc.end_date"
 							:label="__('Batch End Date')"
 							type="date"
+							:format="dateFormat"
 							:required="true"
 							variant="outline"
 						/>
 
-						<!-- beta.7's TimePicker (FormControl type="time") ignores the
-						     `label` prop, so render FormLabel explicitly like Timezone
-						     below — otherwise these fields show only the placeholder. -->
-						<div class="space-y-1.5">
-							<FormLabel :label="__('Session Start Time')" :required="true" />
-							<FormControl
-								v-model="batchDetail.doc.start_time"
-								type="time"
-								variant="outline"
-							/>
-						</div>
-						<div class="space-y-1.5">
-							<FormLabel :label="__('Session End Time')" :required="true" />
-							<FormControl
-								v-model="batchDetail.doc.end_time"
-								type="time"
-								variant="outline"
-							/>
-						</div>
-						<div class="flex flex-col gap-1.5">
-							<FormLabel :label="__('Timezone')" :required="true" />
-							<Combobox
-								v-model="batchDetail.doc.timezone"
-								:options="timezoneOptions"
-								:placeholder="__('Select timezone')"
-								variant="outline"
-								class="w-full"
-							/>
-						</div>
+						<FormControl
+							v-model="batchDetail.doc.start_time"
+							type="time"
+							:label="__('Session Start Time')"
+							:required="true"
+							variant="outline"
+						/>
+						<FormControl
+							v-model="batchDetail.doc.end_time"
+							type="time"
+							:label="__('Session End Time')"
+							:required="true"
+							variant="outline"
+						/>
+						<Combobox
+							v-model="batchDetail.doc.timezone"
+							:options="timezoneOptions"
+							:placeholder="__('Select timezone')"
+							:label="__('Timezone')"
+							:required="true"
+							variant="outline"
+							class="w-full"
+						/>
 
 						<FormControl
 							v-model="batchDetail.doc.seat_count"
@@ -106,7 +102,7 @@
 							/>
 							<div
 								v-if="batchDetail.doc.paid_batch"
-								class="grid grid-cols-2 gap-3"
+								class="grid grid-cols-1 md:grid-cols-2 gap-3"
 							>
 								<FormControl
 									v-model="batchDetail.doc.amount"
@@ -135,6 +131,7 @@
 								v-model="batchDetail.doc.evaluation_end_date"
 								:label="__('Evaluation End Date')"
 								type="date"
+								:format="dateFormat"
 								variant="outline"
 							/>
 						</div>
@@ -150,13 +147,24 @@
 							v-model="instructors"
 							doctype="User"
 							url="lms.lms.api.search_users_by_role"
-							:searchParams="{ roles: JSON.stringify(['Batch Evaluator']) }"
+							:searchParams="{
+								roles: JSON.stringify(['Batch Evaluator', 'Course Creator']),
+							}"
 							:label="__('Instructors')"
 							:placeholder="__('Select instructors')"
 							:required="true"
+							:disabled="!batch.data?.can_change_instructors"
 							variant="outline"
 							:onCreate="() => (showMemberModal = true)"
-						/>
+						>
+							<template #summary="{ selected, summary }">
+								{{
+									selected.length
+										? summarisePeople(selected.map((o) => o.label))
+										: summary
+								}}
+							</template>
+						</MultiLink>
 						<Select
 							v-model="batchDetail.doc.medium"
 							:label="__('Medium')"
@@ -170,12 +178,7 @@
 							:label="__('Enrollment Confirmation Email Template')"
 							v-model="batchDetail.doc.confirmation_email_template"
 							variant="outline"
-							:onCreate="
-								(value, close) => {
-									if (close) close()
-									showEmailTemplateModal = true
-								}
-							"
+							:onCreate="openEmailTemplateForm"
 						/>
 						<FormControl
 							v-model="batchDetail.doc.description"
@@ -192,13 +195,14 @@
 						:label="__('Preview Video')"
 					/>
 					<div class="space-y-1.5">
-						<FormLabel
+						<InputLabel
+							:id="batchDetailsLabelId"
+							:for-id="batchDetailsId"
 							:label="__('Batch Details')"
-							:id="batchDetailsId"
 							:required="true"
 						/>
 						<div
-							class="rounded-t-lg rounded-b-md outline-none transition-[box-shadow] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]"
+							class="rounded-t-6 rounded-b-5 outline-none transition-[box-shadow] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]"
 						>
 							<RichTextEditor
 								:id="batchDetailsId"
@@ -206,7 +210,7 @@
 								@change="(val: string) => updateBatchDetails(val)"
 								:editable="true"
 								:fixedMenu="true"
-								editorClass="prose-sm max-w-none border-b border-x border-outline-gray-2 hover:border-outline-gray-3 hover:shadow-sm focus-within:border-outline-gray-4 focus-within:shadow-sm rounded-b-md py-1 px-2 min-h-[7rem] max-h-[16rem] overflow-y-scroll transition-colors"
+								editorClass="prose-sm max-w-none border-b border-x border-outline-gray-2 hover:border-outline-gray-3 hover:shadow-sm focus-within:border-outline-gray-4 focus-within:shadow-sm rounded-b-5 py-1 px-2 min-h-[7rem] max-h-[16rem] overflow-y-scroll transition-colors"
 							/>
 						</div>
 					</div>
@@ -283,7 +287,10 @@
 					<BatchCourses :batch="batch" />
 				</div>
 				<div class="p-4">
-					<Assessments :batch="batch.data?.name" />
+					<Assessments
+						:batch="batch.data?.name"
+						:can-manage="Boolean(batch.data?.can_manage)"
+					/>
 				</div>
 			</div>
 		</div>
@@ -292,12 +299,6 @@
 		v-model="showMemberModal"
 		:defaultRoles="['batch_evaluator']"
 		@created="onInstructorCreated"
-	/>
-	<EmailTemplateModal
-		v-model="showEmailTemplateModal"
-		v-model:emailTemplates="emailTemplates"
-		templateID="new"
-		@created="onEmailTemplateCreated"
 	/>
 </template>
 <script setup lang="ts">
@@ -311,18 +312,18 @@ import {
 	toRaw,
 	watch,
 	nextTick,
-	useId,
 } from 'vue'
 import {
 	Combobox,
 	FormControl,
-	FormLabel,
 	createDocumentResource,
 	createResource,
 	toast,
 	call,
-	createListResource,
 } from 'frappe-ui'
+import type { FrappeResourceError } from 'frappe-ui'
+import { reportAutosaveError } from '@/utils/resource'
+import { InputLabel, useInputLabeling } from 'frappe-ui/experimental'
 import { useDebounceFn } from '@vueuse/core'
 import BooleanSwitch from '@/components/Controls/BooleanSwitch.vue'
 import {
@@ -332,20 +333,22 @@ import {
 	updateMetaInfo,
 } from '@/utils'
 import { validateBatch } from '@/utils/batchForm'
+import { getDateFormat } from '@/utils/format'
 import {
 	useKeyboardShortcuts,
 	saveShortcut,
 } from '@/composables/useKeyboardShortcuts'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import Uploader from '@/components/Controls/Uploader.vue'
 import VideoPreviewField from '@/components/Controls/VideoPreviewField.vue'
 import MultiLink from '@/components/Controls/MultiLink.vue'
+import { summarisePeople } from '@/utils/peopleSummary'
 import Link from '@/components/Controls/Link.vue'
 import Select from '@/components/Controls/Select.vue'
 import BatchCourses from '@/pages/Batches/components/BatchCourses.vue'
 import Assessments from '@/pages/Batches/components/Assessments.vue'
 import NewMemberModal from '@/components/Modals/NewMemberModal.vue'
-import EmailTemplateModal from '@/components/Modals/EmailTemplateModal.vue'
+import { openBatchForm } from '@/composables/useBatchForms'
 import type { LMSBatch } from '@/types/lms/LMSBatch'
 import type { CourseInstructor } from '@/types/lms/CourseInstructor'
 import type { Resource, BatchDetails, SessionUser } from '@/types'
@@ -368,17 +371,19 @@ const props = defineProps<{
 }>()
 
 const router = useRouter()
+const route = useRoute()
 const user = inject<SessionUser>('$user')!
 const instructors = ref<string[]>([])
+const dateFormat = getDateFormat()
 const app = getCurrentInstance()!
 const { $dialog } = app.appContext.config.globalProperties as {
 	$dialog: DialogFn
 }
 const isDirty = ref<boolean>(false)
 const originalDoc = ref<LMSBatch | null>(null)
-const batchDetailsId = useId()
+const { inputId: batchDetailsId, labelId: batchDetailsLabelId } =
+	useInputLabeling({})
 const showMemberModal = ref<boolean>(false)
-const showEmailTemplateModal = ref<boolean>(false)
 const emailTemplateLinkRef = ref<{ reload: () => void } | null>(null)
 
 const batchDetail = createDocumentResource({
@@ -387,18 +392,33 @@ const batchDetail = createDocumentResource({
 	auto: true,
 }) as Resource<LMSBatch | null>
 
-const emailTemplates = createListResource({
-	doctype: 'Email Template',
-	fields: ['name', 'subject', 'use_html', 'response', 'response_html'],
-	auto: true,
-	orderBy: 'modified desc',
-	cache: 'email-templates',
-})
-
-const onEmailTemplateCreated = (name: string): void => {
-	if (batchDetail.doc) batchDetail.doc.confirmation_email_template = name
-	emailTemplateLinkRef.value?.reload()
+const openEmailTemplateForm = (): void => {
+	openBatchForm(
+		router,
+		'NewBatchEmailTemplate',
+		props.batch.data?.name ?? '',
+		route.hash
+	)
 }
+
+// EmailTemplateForm is a route now, so it cannot emit `created` back at this
+// component the way the modal did — it hands the new name over in the URL
+// instead. Waits on the doc as well as the query because a deep-linked return
+// remounts this form and the doc lands after the query does. The param is
+// stripped once adopted, or a later reload would re-apply it over whatever the
+// user picked since.
+watch(
+	[() => route.query.emailTemplate, () => batchDetail.doc],
+	([created]) => {
+		if (typeof created !== 'string' || !created || !batchDetail.doc) return
+		batchDetail.doc.confirmation_email_template = created
+		emailTemplateLinkRef.value?.reload()
+		const query = { ...route.query }
+		delete query.emailTemplate
+		router.replace({ ...route, query })
+	},
+	{ immediate: true, flush: 'post' }
+)
 
 const updateBatchDetails = (value: string): void => {
 	if (batchDetail.doc) batchDetail.doc.batch_details = value
@@ -433,7 +453,7 @@ let lastAutoSaveError: string | null = null
 
 // Debounced so a burst of edits collapses into a single save shortly after the
 // user pauses (mirrors CourseForm). When a mandatory field is empty or the
-// amount is invalid, the autosave can't succeed — surface the reason once and
+// amount is invalid, the autosave can't succeed. Surface the reason once and
 // keep the "Not Saved" badge (isDirty stays true) so the change isn't lost.
 const autoSave = useDebounceFn((): void => {
 	if (!isDirty.value) return
@@ -537,13 +557,8 @@ const updateBatch = (opts: { silent?: boolean } = {}): void => {
 				// the saved changes without a page reload (mirrors CourseForm).
 				props.batch.reload()
 			},
-			onError(err: { messages?: string[] } | string) {
-				const msg =
-					typeof err === 'string' ? err : err.messages?.[0] ?? __('Error')
-				// Autosave failures stay quiet; the orange "Not Saved" badge remains
-				// (isDirty is untouched) so the change isn't silently lost.
-				if (!opts.silent) toast.error(msg)
-				console.error(err)
+			onError(err: FrappeResourceError) {
+				reportAutosaveError(err, opts.silent)
 			},
 		}
 	)

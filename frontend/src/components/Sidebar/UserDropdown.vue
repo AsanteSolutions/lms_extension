@@ -1,9 +1,16 @@
 <template>
 	<div class="p-2">
 		<Dropdown :options="userDropdownOptions">
+			<template #item-suffix="{ selected }">
+				<span
+					v-if="selected"
+					class="lucide-check size-4 text-ink-gray-7"
+					aria-hidden="true"
+				/>
+			</template>
 			<template v-slot="{ open, close }">
 				<button
-					class="flex h-12 py-2 items-center rounded-md duration-300 ease-in-out"
+					class="flex h-12 items-center rounded-5 duration-300 ease-in-out"
 					:class="
 						isCollapsed
 							? 'px-0 w-auto'
@@ -14,10 +21,11 @@
 				>
 					<img
 						v-if="branding.data?.banner_image"
-						:src="branding.data?.banner_image.file_url"
-						class="w-8 h-8 rounded flex-shrink-0"
+						:src="safeUrl(branding.data?.banner_image.file_url)"
+						alt=""
+						class="w-8 h-8 rounded-4 flex-shrink-0"
 					/>
-					<LMSLogo v-else class="w-8 h-8 rounded flex-shrink-0" />
+					<LMSLogo v-else class="w-8 h-8 rounded-4 flex-shrink-0" />
 					<div
 						class="flex flex-1 flex-col text-start duration-300 ease-in-out"
 						:class="
@@ -26,7 +34,7 @@
 								: 'opacity-100 ms-2 w-auto'
 						"
 					>
-						<div class="text-base-medium text-ink-gray-9 leading-none">
+						<div class="text-p-base-medium text-ink-gray-9">
 							<span
 								v-if="
 									branding.data?.app_name && branding.data?.app_name != 'Frappe'
@@ -38,7 +46,7 @@
 						</div>
 						<div
 							v-if="userResource.data"
-							class="mt-1 text-sm text-ink-gray-7 leading-none"
+							class="-mt-0.5 text-p-sm text-ink-gray-7"
 						>
 							{{ convertToTitleCase(userResource.data?.full_name) }}
 						</div>
@@ -65,20 +73,19 @@
 
 <script setup>
 import { sessionStore } from '@/stores/session'
-import { call, Dropdown, toast } from 'frappe-ui'
+import { call, createResource, Dropdown, toast } from 'frappe-ui'
 import { useRouter } from 'vue-router'
 import { convertToTitleCase } from '@/utils'
-import { applyTheme, toggleTheme, theme } from '@/utils/theme'
+import { setThemePreference, themePreference } from '@/utils/theme'
 import { usersStore } from '@/stores/user'
 import { useSettings } from '@/stores/settings'
-import { markRaw, watch, ref, onMounted, computed } from 'vue'
+import { h, watch, ref, computed } from 'vue'
 import { createDialog } from '@/utils/dialogs'
-import Apps from '@/components/Sidebar/Apps.vue'
-import Configuration from '@/components/Sidebar/Configuration.vue'
 import FrappeCloudIcon from '@/components/Icons/FrappeCloudIcon.vue'
 import LMSLogo from '@/components/Icons/LMSLogo.vue'
 import SettingsModal from '@/components/Settings/Settings.vue'
-import { Moon, Sun } from 'lucide-vue-next'
+import { safeUrl } from '@/utils/safeUrl'
+import { openExternal } from '@/utils/openExternal'
 
 const router = useRouter()
 const { logout, branding } = sessionStore()
@@ -96,10 +103,51 @@ const props = defineProps({
 	},
 })
 
-onMounted(() => {
-	if (['light', 'dark'].includes(theme.value)) {
-		applyTheme(theme.value)
+const apps = createResource({
+	url: 'frappe.apps.get_apps',
+	cache: 'apps',
+	auto: true,
+	transform: (data) => [deskApp(), ...siblingApps(data)],
+})
+
+function deskApp() {
+	return {
+		name: 'frappe',
+		logo: '/assets/lms/images/desk.png',
+		title: __('Desk'),
+		route: '/desk/learning',
 	}
+}
+
+function siblingApps(data) {
+	return data
+		.filter((app) => app.name !== 'lms')
+		.map((app) => ({
+			name: app.name,
+			logo: app.logo,
+			title: __(app.title),
+			route: app.route,
+		}))
+}
+
+const appMenuItems = computed(() => {
+	return (apps.data || []).map((app) => ({
+		label: app.title,
+		onClick: () => {
+			window.location.href = app.route
+		},
+		slots: {
+			prefix: () =>
+				// alt="" deliberately: the row's own label names the app, and a
+				// second announcement of it would only repeat. Without it a screen
+				// reader falls back to reading the logo's filename.
+				h('img', {
+					class: 'size-4 shrink-0 rounded-4',
+					src: app.logo,
+					alt: '',
+				}),
+		},
+	}))
 })
 
 watch(
@@ -113,7 +161,7 @@ const userDropdownOptions = computed(() => {
 	return [
 		{
 			group: '',
-			items: [
+			options: [
 				{
 					icon: 'lucide-user',
 					label: 'My Profile',
@@ -125,14 +173,33 @@ const userDropdownOptions = computed(() => {
 					},
 				},
 				{
-					icon: theme.value === 'light' ? Moon : Sun,
-					label: 'Toggle Theme',
-					onClick: () => {
-						toggleTheme()
-					},
+					icon: 'lucide-sun-moon',
+					label: __('Theme'),
+					submenu: [
+						{
+							icon: 'lucide-sun',
+							label: __('Light'),
+							selected: themePreference.value === 'light',
+							onClick: () => setThemePreference('light'),
+						},
+						{
+							icon: 'lucide-moon',
+							label: __('Dark'),
+							selected: themePreference.value === 'dark',
+							onClick: () => setThemePreference('dark'),
+						},
+						{
+							icon: 'lucide-monitor',
+							label: __('System'),
+							selected: themePreference.value === 'system',
+							onClick: () => setThemePreference('system'),
+						},
+					],
 				},
 				{
-					component: markRaw(Apps),
+					icon: 'lucide-layout-grid',
+					label: __('Apps'),
+					submenu: appMenuItems.value,
 					condition: () => {
 						let cookies = new URLSearchParams(
 							document.cookie.split('; ').join('&')
@@ -153,7 +220,20 @@ const userDropdownOptions = computed(() => {
 					},
 				},
 				{
-					component: markRaw(Configuration),
+					icon: 'lucide-wrench',
+					label: __('Configuration'),
+					submenu: [
+						{
+							icon: 'lucide-arrow-down-to-line',
+							label: __('Import'),
+							onClick: () => {
+								router.push({
+									name: 'DataImportList',
+									query: { step: 'list' },
+								})
+							},
+						},
+					],
 					condition: () => {
 						return userResource.data?.is_moderator
 					},
@@ -184,7 +264,7 @@ const userDropdownOptions = computed(() => {
 								{
 									label: __('Confirm'),
 									variant: 'solid',
-									onClick(close) {
+									onClick({ close }) {
 										loginToFrappeCloud()
 										close()
 									},
@@ -228,7 +308,7 @@ const userDropdownOptions = computed(() => {
 
 const loginToFrappeCloud = () => {
 	let redirect_to = '/dashboard/sites/' + userResource.data.sitename
-	window.open(`${frappeCloudBaseEndpoint}${redirect_to}`, '_blank')
+	openExternal(`${frappeCloudBaseEndpoint}${redirect_to}`)
 }
 
 const clearDemoDataConfirmation = () => {
@@ -242,7 +322,7 @@ const clearDemoDataConfirmation = () => {
 				label: __('Confirm'),
 				theme: 'red',
 				variant: 'solid',
-				onClick(close) {
+				onClick({ close }) {
 					clearDemoData()
 					close()
 				},

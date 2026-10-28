@@ -6,7 +6,7 @@
 					v-for="topic in helpTopics"
 					:key="topic.key"
 					:open="openKey === topic.key || leaving.has(topic.key)"
-					class="rounded-md border border-outline-gray-2"
+					class="rounded-5 border border-outline-gray-2"
 				>
 					<summary
 						class="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-p-base font-medium text-ink-gray-8"
@@ -51,7 +51,7 @@ import VideoBlock from '@/components/VideoBlock.vue'
 
 const show = defineModel()
 
-// One ordered list — the text-only Instructor Notes topic first, then the four
+// One ordered list: the text-only Instructor Notes topic first, then the four
 // videoed topics. Video paths are the static assets ExplanationVideos.vue used
 // to map by `type`; inlining them here lets the video sit in the open accordion
 // instead of a second modal.

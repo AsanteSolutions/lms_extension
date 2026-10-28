@@ -4,6 +4,7 @@
 		:title="__('All Courses')"
 		:rows="courses.data || []"
 		:loading="courses.list.loading || reloading"
+		:total-count="courseCount"
 		:has-next-page="courses.hasNextPage"
 		v-model:page-length="pageLength"
 		empty-name="Courses"
@@ -11,43 +12,37 @@
 		@load-more="courses.next()"
 	>
 		<template #actions>
-			<Dropdown
-				placement="right"
-				side="bottom"
-				v-if="canCreateCourse()"
-				:options="courseMenu"
-			>
-				<template v-slot="{ open }">
-					<Button variant="solid">
-						<template #prefix>
-							<span class="lucide-plus size-4" />
-						</template>
-						{{ __('Create') }}
-						<template #suffix>
-							<span
-								:class="[
-									'lucide-chevron-down ms-1 size-4 transform transition-transform',
-									open ? 'rotate-180' : '',
-								]"
-							/>
-						</template>
+			<div v-if="canCreateCourse()" class="flex items-center gap-2">
+				<Dropdown
+					align="end"
+					side="bottom"
+					:options="importMenu"
+					@update:open="(open) => open && capture('course_import_menu_opened')"
+				>
+					<Button variant="subtle">
+						{{ __('Import') }}
 					</Button>
-				</template>
-			</Dropdown>
-		</template>
-
-		<template #tabs>
-			<TabButtons :options="courseTabs" v-model="currentTab" class="w-fit" />
+				</Dropdown>
+				<Button variant="solid" @click="openNewCourse">
+					<template #prefix>
+						<span class="lucide-plus size-4" />
+					</template>
+					{{ __('New Course') }}
+				</Button>
+			</div>
 		</template>
 
 		<template #filters>
+			<TabButtons
+				:options="courseTabs"
+				v-model="currentTab"
+				class="!w-fit shrink-0"
+			/>
 			<FormControl
 				v-model="title"
 				:placeholder="__('Search')"
 				:aria-label="__('Search')"
 				type="text"
-				class="w-full sm:min-w-40 lg:w-32 lg:min-w-0 xl:w-40"
-				@input="updateCourses()"
 			>
 				<template #prefix>
 					<span class="lucide-search size-4 text-ink-gray-5" />
@@ -59,11 +54,7 @@
 				:options="categories.data.filter((c) => c.value)"
 				:placeholder="__('Category')"
 				@update:modelValue="updateCourses()"
-				class="w-full sm:w-auto"
 			/>
-		</template>
-
-		<template #toggles>
 			<ToggleFilter
 				:modelValue="certification"
 				:label="__('Certification')"
@@ -82,21 +73,13 @@
 		</template>
 	</ListPage>
 
-	<NewCourseModal
-		v-if="showCourseModal"
-		v-model="showCourseModal"
-		:courses="courses"
-	/>
-
-	<CourseImportModal
-		v-if="showCourseImportModal"
-		v-model="showCourseImportModal"
-	/>
+	<router-view />
 </template>
 <script setup>
 import {
 	Button,
 	createListResource,
+	createResource,
 	Dropdown,
 	FormControl,
 	TabButtons,
@@ -110,8 +93,9 @@ import { sessionStore } from '@/stores/session'
 import { canCreateCourse } from '@/utils'
 import CourseCard from '@/components/CourseCard.vue'
 import { useRouter } from 'vue-router'
-import NewCourseModal from '@/pages/Courses/NewCourseModal.vue'
-import CourseImportModal from '@/pages/Courses/CourseImportModal.vue'
+import { openFormRoute } from '@/composables/useFormRoute'
+import { setFormSource } from '@/composables/formTracking'
+import { useTelemetry } from '@framework/ui/telemetry/index'
 
 const user = inject('$user')
 const dayjs = inject('$dayjs')
@@ -125,15 +109,15 @@ const setCertification = (value) => {
 	updateCourses()
 }
 const filters = ref({})
-const currentTab = user.data?.is_student ? ref('enrolled') : ref('live')
+const currentTab = ref('live')
 const { brand } = sessionStore()
 const router = useRouter()
-const showCourseModal = ref(false)
-const showCourseImportModal = ref(false)
 
 onMounted(() => {
 	setFiltersFromQuery()
 	updateCourses()
+	// TextInput emits on input and change; watched after query hydration to avoid a refetch.
+	watch(title, updateCourses)
 })
 
 const setFiltersFromQuery = () => {
@@ -144,8 +128,13 @@ const setFiltersFromQuery = () => {
 	certification.value = queries.get('certification') === 'true'
 	const tab = queries.get('tab')
 	if (tab) currentTab.value = tab
+	// Compatibility shim: ?newCourse=1 was this page's ad-hoc deep link before
+	// /courses/new existed. BatchCourseModal.vue:27 still emits it, as may
+	// bookmarks and anything outside the SPA, so forward it rather than drop it.
+	// replace(), so the query-param URL is not left behind as an entry the user
+	// can go Back to and re-open the form from.
 	if (queries.get('newCourse') == '1') {
-		showCourseModal.value = true
+		router.replace({ name: 'NewCourse' })
 	}
 }
 
@@ -155,23 +144,28 @@ const courses = createListResource({
 	cache: ['courses', user.data?.name],
 	pageLength: 24,
 	start: start.value,
-	transform(data) {
-		if (
-			user.data?.is_instructor &&
-			!user.data?.is_system_manager &&
-			!user.data?.is_moderator &&
-			!user.data?.is_evaluator
-		) {
-			return data.filter((element) => {
-				return element.instructors.some(
-					(instructor) => instructor.name === user.data?.name
-				)
-			})
-		}
+})
 
-		return data
+// The tabs filter on `enrolled`, `created` and `live`, which are not fields,
+// so `frappe.client.get_count` cannot answer this; only the endpoint that
+// resolves them can. Without it the footer can say how many rows it has but
+// not how many there are.
+const courseCountResource = createResource({
+	url: 'lms.lms.utils.get_course_count',
+	makeParams: () => ({ filters: filters.value }),
+	onError: (error) => {
+		console.error(error)
 	},
 })
+
+const courseCount = computed(() => courseCountResource.data ?? null)
+
+const getCourseCount = () => {
+	// Same sequencing hazard as the list: nothing orders the responses, so a
+	// slow count for filters the user has left would overwrite the current one.
+	courseCountResource.abort()
+	courseCountResource.submit()
+}
 
 // `list.loading` goes false mid-request: the aborted fetch's tail resolves
 // after the new reload() has started and clears the flag for it, so the empty
@@ -208,13 +202,14 @@ const updateCourses = () => {
 	updateFilters()
 	// createResource keeps no request sequence: every response assigns
 	// `data`, so a slow fetch for filters the user has already left repaints
-	// the list with the wrong courses seconds later. Cancel it first — an
+	// the list with the wrong courses seconds later. Cancel it first: an
 	// aborted fetch is swallowed and never reaches the list.
 	courses.list.abort()
 	courses.update({
 		filters: filters.value,
 	})
 	reloadCourses()
+	getCourseCount()
 }
 
 const updateFilters = () => {
@@ -310,7 +305,12 @@ const setQueryParams = () => {
 		queryString = `?${queries.toString()}`
 	}
 
-	history.replaceState({}, '', `${location.pathname}${queryString}`)
+	// Carry the existing state forward rather than replacing it with `{}`. This
+	// page hosts form child routes whose open/close semantics hang off a marker
+	// in history.state, and that marker only survives a reload through
+	// window.history. `{}` also being truthy means vue-router never re-seeds its
+	// own `position` key after such a reload, so every later pop delta is NaN.
+	history.replaceState(history.state, '', `${location.pathname}${queryString}`)
 }
 
 watch(currentTab, () => {
@@ -318,24 +318,21 @@ watch(currentTab, () => {
 })
 
 const courseTabs = computed(() => {
-	let tabs = []
+	let tabs = [
+		{
+			label: __('Published'),
+			value: 'live',
+		},
+		{
+			label: __('Upcoming'),
+			value: 'upcoming',
+		},
+	]
 	if (
 		user.data?.is_moderator ||
 		user.data?.is_instructor ||
 		user.data?.is_evaluator
 	) {
-		tabs.push({
-			label: __('Live'),
-			value: 'live',
-		})
-		tabs.push({
-			label: __('New'),
-			value: 'new',
-		})
-		tabs.push({
-			label: __('Upcoming'),
-			value: 'upcoming',
-		})
 		tabs.push({ label: __('Created'), value: 'created' })
 		tabs.push({ label: __('Unpublished'), value: 'unpublished' })
 	} else if (user.data) {
@@ -344,34 +341,33 @@ const courseTabs = computed(() => {
 	return tabs
 })
 
-const courseMenu = computed(() => {
-	return [
-		{
-			label: __('New Course'),
-			icon: 'lucide-book-open',
-			onClick() {
-				showCourseModal.value = true
-			},
+const { capture } = useTelemetry()
+
+// openFormRoute, not a bare router.push: it stamps the history entry so the
+// form's own close() pops it instead of replacing.
+const openNewCourse = () => {
+	setFormSource('header_button')
+	openFormRoute(router, { name: 'NewCourse' })
+}
+
+const importMenu = computed(() => [
+	{
+		label: __('Import from a spreadsheet'),
+		icon: 'lucide-upload',
+		onClick() {
+			capture('course_import_clicked', { via: 'spreadsheet' })
+			router.push({ name: 'NewDataImport', params: { doctype: 'LMS Course' } })
 		},
-		{
-			label: __('Import via Data Import Tool'),
-			icon: 'lucide-upload',
-			onClick() {
-				router.push({
-					name: 'NewDataImport',
-					params: { doctype: 'LMS Course' },
-				})
-			},
+	},
+	{
+		label: __('Import via ZIP'),
+		icon: 'lucide-folder-plus',
+		onClick() {
+			capture('course_import_clicked', { via: 'zip' })
+			openFormRoute(router, { name: 'CourseImport' })
 		},
-		{
-			label: __('Import via ZIP'),
-			icon: 'lucide-folder-plus',
-			onClick() {
-				showCourseImportModal.value = true
-			},
-		},
-	]
-})
+	},
+])
 
 const breadcrumbs = computed(() => [
 	{

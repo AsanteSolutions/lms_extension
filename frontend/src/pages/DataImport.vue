@@ -1,50 +1,15 @@
 <template>
-	<DataImport
-		:doctype="route.params.doctype"
-		:importName="route.params.importName"
-		:doctypeMap="doctypeMap"
-	/>
+	<ImportList v-if="hasDataImportWizard && route.name === 'DataImportList'" />
+	<WizardImport v-else-if="hasDataImportWizard" />
+	<LegacyImport v-else />
 </template>
 <script setup lang="ts">
-import { usePageMeta } from 'frappe-ui'
-import { DataImport } from 'frappe-ui/frappe'
-import { sessionStore } from '../stores/session'
-import { useRoute, useRouter } from 'vue-router'
-import { inject, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
+import { hasDataImportWizard } from '@/utils/frameworkDataImport'
+import ImportList from '@/pages/DataImport/List.vue'
+import WizardImport from '@/pages/DataImport/Wizard.vue'
+import LegacyImport from '@/pages/DataImport/Legacy.vue'
 
-const { brand } = sessionStore()
+// The one-page import lists saved imports itself; the wizard has no list.
 const route = useRoute()
-const router = useRouter()
-const user = inject<any>('$user')
-
-onMounted(() => {
-	if (!user.data?.is_moderator) {
-		router.push({
-			name: 'Courses',
-		})
-	}
-})
-
-const doctypeMap = {
-	'LMS Course': {
-		title: 'Courses',
-		listRoute: '/courses',
-		pageRoute: `/courses/docname`,
-	},
-	'LMS Batch': {
-		title: 'Batches',
-		listRoute: '/batches',
-	},
-	'LMS Category': {
-		title: 'Categories',
-		listRoute: '/lms',
-	},
-}
-
-usePageMeta(() => {
-	return {
-		title: __('Data Import'),
-		icon: brand.favicon,
-	}
-})
 </script>

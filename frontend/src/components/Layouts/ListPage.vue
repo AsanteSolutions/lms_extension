@@ -1,41 +1,41 @@
 <template>
-	<!-- A list page, declared. The page says what it filters and what a row
-	     looks like; everything below owns how that reads at each breakpoint.
-	     Shaped after helpdesk's ListViewBuilder.vue, which likewise takes the
-	     columns, the row options and the footer counts as configuration. -->
-	<LayoutHeader>
-		<template #left-header>
-			<Breadcrumbs :items="breadcrumbs" />
-		</template>
-		<template #right-header>
+	<PageHeader :breadcrumbs="breadcrumbs">
+		<template #actions>
 			<slot name="actions" />
 		</template>
-	</LayoutHeader>
+	</PageHeader>
 
-	<ListPageBody>
-		<ListPageHeader :title="title">
-			<template v-if="$slots.title" #title><slot name="title" /></template>
-			<template v-if="$slots.tabs" #tabs><slot name="tabs" /></template>
-			<template v-if="$slots.filters" #filters
-				><slot name="filters"
-			/></template>
-			<template v-if="$slots.toggles" #toggles
-				><slot name="toggles"
-			/></template>
-		</ListPageHeader>
+	<PageBody :title="title" :selecting="selecting">
+		<template v-if="$slots.name" #name>
+			<slot name="name" v-bind="{ totalCount: resolvedCount }" />
+		</template>
+		<template v-if="$slots.filters || search !== undefined" #filters>
+			<FormControl
+				v-if="search !== undefined"
+				v-model="search"
+				type="text"
+				:placeholder="__('Search')"
+				:aria-label="__('Search')"
+			>
+				<template #prefix>
+					<span
+						class="lucide-search size-4 text-ink-gray-5"
+						aria-hidden="true"
+					/>
+				</template>
+			</FormControl>
+			<slot name="filters" />
+		</template>
+
+		<span class="sr-only" role="status">{{ loadingAnnouncement }}</span>
 
 		<SkeletonLoader
 			v-if="loading && !rows.length"
 			:variant="skeletonVariant"
 			:count="8"
-			class="min-h-0 flex-1 overflow-y-auto px-5 pb-5"
+			class="px-5 pb-5"
 		/>
-		<!-- The cards own the scroll box at every width, which is what leaves the
-		     header above and the footer below them both in place. -->
-		<div
-			v-else-if="rows.length && layout === 'grid'"
-			class="min-h-0 flex-1 overflow-y-auto px-5 pb-5"
-		>
+		<div v-else-if="rows.length && layout === 'grid'" class="px-5 pb-5">
 			<div
 				class="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"
 			>
@@ -49,6 +49,7 @@
 		</div>
 		<ResponsiveListView
 			v-else-if="rows.length"
+			ref="listView"
 			:columns="columns"
 			:rows="rows"
 			:row-key="rowKey"
@@ -70,17 +71,11 @@
 			<EmptyStateLayout :name="emptyName" :icon="emptyIcon" />
 		</div>
 
-		<!-- Every list page ends the same way, so Load More lives down here with
-		     the counts rather than as a lone button under the last row. -->
 		<template #footer>
 			<ListFooter
 				v-model="pageLength"
-				class="border-t px-3 py-2 sm:px-5"
-				:options="{
-					rowCount: rows.length,
-					totalCount,
-					pageLengthOptions,
-				}"
+				class="flex-wrap border-t px-5 py-2"
+				:options="{ pageLengthOptions }"
 			>
 				<template #right>
 					<div class="flex items-center">
@@ -92,30 +87,29 @@
 						<div v-if="showLoadMore" class="mx-3 h-[80%] border-s" />
 						<div class="flex items-center gap-1 text-base text-ink-gray-5">
 							<div>{{ rows.length }}</div>
-							<!-- Two of these lists are served by endpoints with no
-							     count sibling, so the total is genuinely unknown
-							     rather than zero. Say the loaded count only. -->
-							<template v-if="totalCount !== null">
+							<template v-if="resolvedCount !== null">
 								<div>{{ __('of') }}</div>
-								<div>{{ totalCount }}</div>
+								<div>{{ resolvedCount }}</div>
 							</template>
 						</div>
 					</div>
 				</template>
 			</ListFooter>
 		</template>
-	</ListPageBody>
+	</PageBody>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { Breadcrumbs, Button, ListFooter } from 'frappe-ui'
+import { computed, ref, watch } from 'vue'
+import { Button, createResource, FormControl, toast } from 'frappe-ui'
+import type { FrappeResourceError } from 'frappe-ui'
+import { ListFooter } from 'frappe-ui/experimental'
 import EmptyStateLayout from '@/components/Layouts/EmptyStateLayout.vue'
-import LayoutHeader from '@/components/Layouts/LayoutHeader.vue'
-import ListPageBody from '@/components/Layouts/ListPageBody.vue'
-import ListPageHeader from '@/components/Layouts/ListPageHeader.vue'
+import PageHeader from '@/components/Layouts/PageHeader.vue'
+import PageBody from '@/components/Layouts/PageBody.vue'
 import ResponsiveListView from '@/components/ResponsiveListView.vue'
 import SkeletonLoader from '@/components/SkeletonLoader.vue'
+import { useLoadingAnnouncement } from '@/utils/a11y'
 import type {
 	Breadcrumb,
 	ListColumn,
@@ -124,11 +118,34 @@ import type {
 	ListViewOptions,
 } from '@/types'
 
+/**
+ * The `createListResource` the rows came from, narrowed to what this component
+ * touches. frappe-ui does not re-export its own `ListResource` type from the
+ * package root.
+ */
+interface PagedListResource {
+	doctype: string
+	filters?: Record<string, unknown>
+	data: unknown[] | null
+	/** Optional because frappe-ui declares it on an index signature, which
+	 * does not satisfy a required member. */
+	start?: number
+	list: { loading: boolean }
+	update: (options: Record<string, unknown>) => void
+	reload: () => unknown
+}
+
 const props = withDefaults(
 	defineProps<{
 		breadcrumbs: Breadcrumb[]
 		rows: ListRow[]
 		title?: string
+		/**
+		 * Hand the list resource over and the page stops owning the page-size
+		 * reaction and a count that has to be refetched wherever the list is.
+		 * `totalCount` is answered here rather than passed in.
+		 */
+		listResource?: PagedListResource
 		/** How many rows exist behind the filters; null when no count exists. */
 		totalCount?: number | null
 		/** `grid` hands each row to the #card slot; `list` draws #columns. */
@@ -145,6 +162,7 @@ const props = withDefaults(
 	}>(),
 	{
 		title: '',
+		listResource: undefined,
 		totalCount: null,
 		layout: 'grid',
 		rowKey: 'name',
@@ -162,10 +180,110 @@ const props = withDefaults(
 
 const emit = defineEmits<{ loadMore: [] }>()
 
+// On a phone the bulk-action banner docks against the same bottom edge the
+// footer holds, and the banner is what the reader is working with, so the
+// footer gives the edge up for as long as the selection lasts rather than
+// being covered by it — the page size and Load More are still there, at the
+// end of the rows, and come back the moment the selection is cleared.
+const listView = ref<InstanceType<typeof ResponsiveListView> | null>(null)
+
+const selecting = computed(() => Boolean(listView.value?.selections.size))
+
 const pageLength = defineModel<number>('pageLength', { default: 24 })
+
+// Bound, this renders the search box at the head of the filter strip. Left
+// unbound it is `undefined` and there is no box, so pages with nothing to
+// search are unchanged.
+const search = defineModel<string>('search')
+
+watch(pageLength, (value: number) => {
+	// reload() ignores a new pageLength while start > 0: it refetches the
+	// already loaded rows instead, so paging must be reset for it to apply.
+	props.listResource?.update({ pageLength: value, start: 0 })
+	props.listResource?.reload()
+})
+
+// A page that hands over its list resource gets its count from here, and so
+// can no longer forget to refetch it: every filter change, delete and reload
+// goes through the list, and the count follows it.
+const countResource = props.listResource
+	? createResource({
+			url: 'frappe.client.get_count',
+			makeParams: () => ({
+				doctype: props.listResource?.doctype,
+				filters: props.listResource?.filters,
+			}),
+			auto: false,
+			// Without this the heading just reads zero, which is indistinguishable
+			// from an empty list. Each page used to carry its own; the count moved
+			// here, so the report of its failure has to move here too.
+			onError(error: FrappeResourceError) {
+				toast.error(error.messages?.[0] || __('Could not count the list'))
+			},
+	  })
+	: null
+
+// `immediate` because an `auto: true` list has already started fetching by now,
+// leaving the watcher no edge. A list that has not started is left alone: those
+// pages fetch behind a role check, and the count must not precede the redirect.
+watch(
+	() => props.listResource?.list.loading,
+	(loading, wasLoading) => {
+		if (!loading || wasLoading) return
+		// Paging into a filtered set never changes how big that set is, and
+		// `next()` is the one fetch that leaves `start` past the first page.
+		if ((props.listResource?.start ?? 0) > 0) return
+		// frappe-ui rethrows once onError has run, so the toast above is the whole
+		// report and what comes back here is a rejection nobody is waiting on.
+		countResource?.reload().catch(() => {})
+	},
+	{ immediate: true }
+)
+
+const resolvedCount = computed<number | null>(() =>
+	countResource ? countResource.data ?? 0 : props.totalCount
+)
 
 const skeletonVariant = computed(() =>
 	props.layout === 'grid' ? 'cards' : 'list'
+)
+
+// The skeleton above is `aria-hidden`, and on this page it IS the body, so
+// without this a reader lands on a document with nothing in it and no sign that
+// anything is on its way. The `role="status"` span is a sibling of the whole
+// v-if chain rather than part of it, so it is mounted for the life of the page
+// and every message lands in a region that was already there.
+//
+// It is the only thing here that speaks, so a load says one thing once:
+// PageHeader's breadcrumbs and PageBody's h1 are plain content, `usePageMeta`
+// writes document.title but no screen reader announces an SPA title change, and
+// ResponsiveListView's own `role="status"` lives in the `rows.length` branch and
+// holds nothing until a selection opens.
+//
+// It watches the whole flag rather than the skeleton's `loading && !rows.length`
+// because a filter or a search keeps the old rows on screen while it refetches:
+// no skeleton, but the list underneath is replaced, and "24 results loaded" is
+// the canonical status message. The rows still being readable is exactly why
+// that case gets no "Loading…" — an announcement with nothing on screen to
+// pair it with is the opposite of the parity a status message is for.
+const loadedMessage = () => {
+	// Says the same thing as the empty state it stands beside, deliberately:
+	// wording that diverged would read as a second, different event. Note that a
+	// failed first fetch also lands here, since the resource leaves `rows` empty
+	// and only records the failure on `error` — a signal this component is not
+	// given.
+	if (!props.rows.length) return __('No {0} Found').format(props.emptyName)
+	// Counted rather than named. `emptyName` is a plural noun passed untranslated
+	// ("Courses"), so a translated frame around it reads half-English, and there
+	// is no singular of it to reach for when the count is one.
+	if (props.rows.length === 1) return __('1 result loaded')
+	return __('{0} results loaded').format(props.rows.length)
+}
+
+const loadingAnnouncement = useLoadingAnnouncement(
+	() => props.loading,
+	loadedMessage,
+	() => (props.rows.length ? '' : __('Loading…'))
 )
 
 // createListResource starts out claiming a next page and only learns better

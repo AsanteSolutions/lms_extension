@@ -2,7 +2,7 @@
 	<div v-if="reviews.data?.length || membership" class="mt-12">
 		<div class="flex items-center justify-between gap-3 mb-8">
 			<div class="flex items-center gap-2">
-				<LucideStar class="size-5 text-transparent fill-yellow-500" />
+				<LucideStar class="size-5 text-transparent fill-ink-amber-7" />
 				<span class="text-3xl-semibold text-ink-gray-9">
 					{{ avg_rating ? formatRating(avg_rating) : '0' }}
 				</span>
@@ -16,7 +16,11 @@
 					}}
 				</span>
 			</div>
-			<Button v-if="membership && !hasReviewed.data" @click="openReviewModal()">
+			<Button
+				v-if="membership && !hasReviewed.data"
+				class="text-p-base-medium"
+				@click="openReviewModal()"
+			>
 				{{ __('Write a Review') }}
 			</Button>
 		</div>
@@ -61,7 +65,7 @@
 							class="size-4 text-transparent"
 							:class="
 								i <= Math.ceil(review.rating)
-									? 'fill-yellow-500'
+									? 'fill-ink-amber-7'
 									: 'fill-surface-gray-3'
 							"
 						/>
@@ -85,7 +89,11 @@
 		</div>
 
 		<div v-if="canShowMore" class="mt-8">
-			<Button class="w-full" size="md" @click="showAll = true">
+			<Button
+				class="w-full text-p-base-medium"
+				size="md"
+				@click="showAll = true"
+			>
 				{{ __('View all reviews') }}
 			</Button>
 		</div>
@@ -143,12 +151,14 @@ const reviews = createResource({
 	makeParams() {
 		return { course: props.courseName }
 	},
-	auto: true,
+	auto: Boolean(props.courseName),
 }) as Resource<CourseReviewInfo[] | null>
 
 watch(
 	() => props.courseName,
-	() => reviews.reload()
+	() => {
+		if (props.courseName) reviews.reload()
+	}
 )
 
 const showReviewModal = ref(false)
@@ -156,7 +166,7 @@ const showAll = ref(false)
 const expanded = reactive<Record<string, boolean>>({})
 
 const visibleReviews = computed(() => {
-	// Drop reviews whose author record is missing — owner_details can come
+	// Drop reviews whose author record is missing: owner_details can come
 	// back null for guest-authored or deleted-user reviews, and the row
 	// markup dereferences it for the avatar / profile link.
 	const all = (reviews.data || []).filter((r) => r.owner_details)

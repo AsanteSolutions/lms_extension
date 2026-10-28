@@ -1,6 +1,8 @@
 <template>
 	<div class="p-5">
-		<div class="grid grid-cols-4 gap-5 mb-5 text-ink-gray-9">
+		<div
+			class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-5 text-ink-gray-9"
+		>
 			<NumberChartGraph
 				:title="__('Enrolled')"
 				:value="formatAmount(course.data?.enrollments)"
@@ -14,14 +16,14 @@
 				:value="course.data?.rating || 0"
 			>
 				<template #prefix>
-					<LucideStar class="size-5 text-transparent fill-amber-500" />
+					<LucideStar class="size-5 text-transparent fill-ink-amber-7" />
 				</template>
 			</NumberChartGraph>
 			<NumberChartGraph :title="__('Lessons')" :value="course.data?.lessons" />
 		</div>
 		<div
 			v-if="showStudentsEmptyState"
-			class="flex min-h-[70vh] flex-col items-center justify-center gap-3 px-4 text-center"
+			class="flex min-h-[30vh] sm:min-h-[70vh] flex-col items-center justify-center gap-3 px-4 text-center"
 		>
 			<span class="lucide-users size-7.5 text-ink-gray-5" />
 			<div class="flex flex-col items-center gap-1">
@@ -29,12 +31,15 @@
 					{{ __('No students enrolled yet') }}
 				</span>
 				<span class="text-p-base text-ink-gray-6">
-					{{ __('Enroll students to track their progress here.') }}
+					{{ __('Enroll students to track their progress here') }}
 				</span>
 			</div>
 		</div>
-		<div v-else class="grid grid-cols-[2fr_1fr] gap-5 items-start">
-			<div class="border rounded-lg py-3 px-4">
+		<div
+			v-else
+			class="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-5 items-start"
+		>
+			<div class="border rounded-6 py-3 px-4">
 				<div class="flex items-center justify-between mb-3">
 					<div class="text-lg-semibold text-ink-gray-9">
 						{{ __('Students') }}
@@ -52,84 +57,50 @@
 						</FormControl>
 					</div>
 				</div>
-				<div class="max-h-[63vh] overflow-y-auto">
-					<ListView
+				<div class="sm:max-h-[63vh] sm:overflow-y-auto">
+					<ResponsiveListView
 						v-if="progressList.loading || progressList.data?.length"
 						:columns="progressColumns"
-						:rows="progressList.data"
-						rowKey="name"
-						:options="{
-							selectable: false,
-							showTooltip: false,
-						}"
+						:rows="progressList.data || []"
+						row-key="name"
+						:options="studentListOptions"
 					>
-						<ListHeader
-							class="mb-2 grid items-center gap-x-4 rounded bg-surface-gray-2 p-2"
-						>
-							<ListHeaderItem
-								:item="item"
-								v-for="item in progressColumns"
-								:key="item.key"
+						<template #cell="{ column, row, value }">
+							<span
+								v-if="column.key === 'member_name'"
+								class="flex items-center gap-2"
 							>
-							</ListHeaderItem>
-						</ListHeader>
-						<ListRows>
-							<ListRow
-								v-for="row in progressList.data"
-								:key="row.name"
-								:row="row"
-								@click="
-									() => {
-										showProgressModal = true
-										currentStudent = row
-									}
-								"
-								class="cursor-pointer"
+								<Avatar
+									:image="row.member_image as string"
+									:label="String(value)"
+									size="sm"
+								/>
+								<span class="min-w-0 truncate">{{ value }}</span>
+							</span>
+							<span
+								v-else-if="column.key === 'progress'"
+								class="flex items-center gap-2"
 							>
-								<template #default="{ column, item }">
-									<ListRowItem
-										:item="row[column.key]"
-										:align="column.align"
-										class="w-full"
-									>
-										<template #prefix>
-											<div v-if="column.key == 'member_name'">
-												<Avatar
-													class="flex items-center"
-													:image="row['member_image']"
-													:label="item"
-													size="sm"
-												/>
-											</div>
-											<ProgressBar
-												v-else-if="column.key == 'progress'"
-												:progress="Math.ceil(row[column.key])"
-												class="!mx-0 !me-4"
-											/>
-										</template>
-										<div v-if="column.key == 'creation'">
-											{{ dayjs(row[column.key]).format('DD MMM YYYY') }}
-										</div>
-										<div
-											v-else-if="column.key == 'progress'"
-											class="text-xs !mx-0 w-10 text-right shrink-0"
-										>
-											{{ Math.ceil(row[column.key]) }}%
-										</div>
-										<div v-else>
-											{{ row[column.key].toString() }}
-										</div>
-									</ListRowItem>
-								</template>
-							</ListRow>
-						</ListRows>
-					</ListView>
+								<ProgressBar
+									:progress="Math.ceil(Number(value))"
+									class="!mx-0 min-w-0 flex-1"
+								/>
+								<span class="text-xs shrink-0">
+									{{ Math.ceil(Number(value)) }}%
+								</span>
+							</span>
+							<span v-else-if="column.key === 'creation'">
+								{{ dayjs(value as string).format('DD MMM YYYY') }}
+							</span>
+							<span v-else>{{ value }}</span>
+						</template>
+					</ResponsiveListView>
 					<div v-else class="min-h-[200px]">
 						<EmptyStateLayout
 							name="Students"
 							icon="lucide-users"
 							:title="__('No students match your search')"
-							:description="__('Try a different name.')"
+							:description="__('Try a different name')"
 						/>
 					</div>
 					<div
@@ -145,13 +116,14 @@
 			<div class="space-y-5">
 				<div
 					v-if="chartDetails.data?.average_progress > 0"
-					class="border rounded-lg p-4"
+					ref="progressSummary"
+					class="border rounded-6 p-4"
 				>
 					<div class="text-ink-gray-5 mb-4">
 						{{ __('Progress Summary') }}
 					</div>
 					<div
-						class="grid grid-cols-[2fr_1fr] items-center justify-between text-ink-gray-9"
+						class="grid grid-cols-1 sm:grid-cols-[2fr_1fr] gap-4 items-center justify-between text-ink-gray-9"
 					>
 						<ul class="flex flex-col space-y-4 flex-1 text-sm list-none">
 							<li
@@ -160,18 +132,8 @@
 								:key="row.name"
 							>
 								<div
-									class="size-2 rounded"
-									:style="{
-										backgroundColor: `var(--${
-											row.name.startsWith('Just')
-												? 'red'
-												: row.name.startsWith('In')
-												? 'amber'
-												: row.name.startsWith('Adv')
-												? 'blue'
-												: 'green'
-										}-400)`,
-									}"
+									class="size-2 rounded-4"
+									:style="{ backgroundColor: progressColor(row.name) }"
 								></div>
 								<Tooltip :text="row.name.split('(')[1].replace(')', '')">
 									<div class="ms-2">
@@ -191,41 +153,12 @@
 								</Tooltip>
 							</li>
 						</ul>
-						<ECharts
-							class="w-40 h-20"
-							:options="{
-								color: progressColors,
-								series: [
-									{
-										type: 'pie',
-										radius: ['50%', '70%'],
-										center: ['50%', '50%'],
-										label: {
-											show: false,
-										},
-										labelLine: {
-											show: false,
-										},
-										emphasis: {
-											label: {
-												show: false,
-											},
-											scale: false,
-										},
-										legend: {
-											show: false,
-										},
-										data: chartDetails.data?.progress_distribution || [],
-									},
-								],
-								showInlineLabels: false,
-							}"
-						/>
+						<ProgressRing class="w-40 h-20" :slices="progressSlices" />
 					</div>
 				</div>
 				<div
 					v-if="lessonProgress.data?.length"
-					class="border rounded-lg pt-4 px-4"
+					class="border rounded-6 pt-4 px-4"
 				>
 					<div class="flex items-center justify-between mb-4">
 						<div class="text-ink-gray-5">
@@ -234,14 +167,15 @@
 						<Select
 							:options="lessonProgressSortingOptions"
 							@update:modelValue="
-								(value: string) => updateLessonProgress(value)
+								(value: SelectOptionValue | null) =>
+									value != null && updateLessonProgress(String(value))
 							"
 							:placeholder="__('Sort by')"
 							class="!w-32"
 						/>
 					</div>
 					<ul
-						class="divide-y max-h-[40vh] divide-outline-elevation-2 text-ink-gray-7 overflow-y-auto list-none"
+						class="divide-y sm:max-h-[40vh] divide-outline-elevation-2 text-ink-gray-7 sm:overflow-y-auto list-none"
 					>
 						<li
 							v-for="progress in lessonProgress.data"
@@ -275,12 +209,6 @@
 			</div>
 		</div>
 	</div>
-	<CourseEnrollmentModal
-		v-if="showEnrollmentModal"
-		v-model="showEnrollmentModal"
-		:course="course"
-		:students="progressList"
-	/>
 	<StudentCourseProgress
 		v-if="showProgressModal"
 		v-model="showProgressModal"
@@ -295,42 +223,41 @@ import {
 	Button,
 	createListResource,
 	createResource,
-	Dropdown,
-	ECharts,
 	FormControl,
-	ListView,
-	ListHeader,
-	ListHeaderItem,
-	ListRows,
-	ListRow,
-	ListRowItem,
 	Tooltip,
 } from 'frappe-ui'
+import type { SelectOptionValue } from 'frappe-ui'
+import {
+	registerChartModules,
+	useChart,
+	useChartTokens,
+} from 'frappe-ui/charts'
+import { PieChart } from 'echarts/charts'
 import Select from '@/components/Controls/Select.vue'
-import { computed, inject, ref, watch } from 'vue'
+import { computed, defineComponent, h, inject, ref, watch } from 'vue'
+import type { PropType } from 'vue'
 import type dayjsType from 'dayjs'
 import { formatAmount } from '@/utils'
-import CourseEnrollmentModal from '@/pages/Courses/CourseEnrollmentModal.vue'
 import EmptyStateLayout from '@/components/Layouts/EmptyStateLayout.vue'
 import NumberChartGraph from '@/components/NumberChartGraph.vue'
 import ProgressBar from '@/components/ProgressBar.vue'
+import ResponsiveListView from '@/components/ResponsiveListView.vue'
 import StudentCourseProgress from '@/pages/Courses/StudentCourseProgress.vue'
 
-import type { CourseDetails, Resource } from '@/types'
+import type {
+	CourseDetails,
+	ListColumn,
+	ListRow,
+	ListViewOptions,
+	Resource,
+} from '@/types'
 
 const props = defineProps<{
 	course: Resource<CourseDetails | null>
 }>()
 
 const dayjs = inject<typeof dayjsType>('$dayjs')!
-const showEnrollmentModal = ref<boolean>(false)
 const searchFilter = ref<string | null>(null)
-
-function openEnrollModal() {
-	showEnrollmentModal.value = true
-}
-
-defineExpose({ openEnrollModal })
 
 const showProgressModal = ref<boolean>(false)
 const currentStudent = ref<Record<string, unknown> | null>(null)
@@ -365,6 +292,9 @@ const progressList = createListResource({
 	],
 	pageLength: 100,
 	auto: true,
+	// Also how CourseEnrollmentForm reaches this list through
+	// getCachedListResource after enrolling someone — it is a route of its own
+	// now, so it has no way in through props.
 	cache: ['courseProgress', props.course.data?.name],
 })
 
@@ -415,11 +345,63 @@ const showStudentsEmptyState = computed(
 		!progressList.loading && !progressList.data?.length && !searchFilter.value
 )
 
-const progressColors = computed(() =>
-	['red', 'amber', 'blue', 'green'].map((color) => `var(--${color}-400)`)
-)
+type ProgressRow = { name: string; value: number }
+type ProgressSlice = ProgressRow & { itemStyle: { color: string } }
 
-const progressColumns = computed(() => {
+const PROGRESS_CATEGORICAL_SLOT = { red: 8, amber: 6, blue: 0, green: 2 }
+
+registerChartModules([PieChart])
+
+const progressSummary = ref<HTMLElement>()
+const { tokens: chartTokens } = useChartTokens(progressSummary)
+
+const progressHue = (name: string): keyof typeof PROGRESS_CATEGORICAL_SLOT => {
+	if (name.startsWith('Just')) return 'red'
+	if (name.startsWith('In')) return 'amber'
+	if (name.startsWith('Adv')) return 'blue'
+	return 'green'
+}
+
+const progressColor = (name: string) => {
+	const slot = PROGRESS_CATEGORICAL_SLOT[progressHue(name)]
+	return chartTokens.value.categorical[slot]
+}
+
+const progressSlices = computed<ProgressSlice[]>(() => {
+	const rows = (chartDetails.data?.progress_distribution || []) as ProgressRow[]
+	return rows.map((row) => ({
+		...row,
+		itemStyle: { color: progressColor(row.name) },
+	}))
+})
+
+const ProgressRing = defineComponent({
+	props: {
+		slices: { type: Array as PropType<ProgressSlice[]>, required: true },
+	},
+	setup(ringProps) {
+		const plot = ref<HTMLElement>()
+		useChart({
+			container: plot,
+			option: () => ({
+				series: [
+					{
+						type: 'pie',
+						radius: ['50%', '70%'],
+						center: ['50%', '50%'],
+						label: { show: false },
+						labelLine: { show: false },
+						emphasis: { label: { show: false }, scale: false },
+						data: ringProps.slices,
+					},
+				],
+			}),
+		})
+		return () => h('div', { ref: plot })
+	},
+})
+
+const progressColumns = computed<ListColumn[]>(() => {
 	return [
 		{
 			label: __('Name'),
@@ -434,10 +416,19 @@ const progressColumns = computed(() => {
 		{
 			label: __('Enrolled On'),
 			key: 'creation',
-			align: 'right',
+			align: 'left',
 		},
 	]
 })
+
+const studentListOptions: ListViewOptions = {
+	selectable: false,
+	showTooltip: false,
+	onRowClick: (row: ListRow) => {
+		currentStudent.value = row
+		showProgressModal.value = true
+	},
+}
 
 const lessonProgressSortingOptions = [
 	{

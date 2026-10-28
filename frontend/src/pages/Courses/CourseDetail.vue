@@ -1,149 +1,204 @@
 <template>
-	<div class="flex h-full flex-col">
-		<LayoutHeader :isLoading="!course.data">
-			<template #left-header>
-				<Breadcrumbs class="h-7" :items="breadcrumbs" />
-				<Badge v-if="course.data?.published" theme="green">
-					{{ __('Published') }}
+	<TabbedDetailPage
+		ref="page"
+		:tabs="tabs"
+		:breadcrumbs="breadcrumbs"
+		:published="Boolean(course.data?.published)"
+		:loading="!course.data"
+		:doc="course"
+		doc-prop="course"
+	>
+		<template #actions="{ tab }">
+			<template v-if="tab?.key === 'settings' && courseFormRef">
+				<Badge v-if="courseFormRef.isDirty" theme="amber">
+					{{ __('Not Saved') }}
 				</Badge>
-			</template>
-			<template #right-header>
-				<template v-if="tabIndex === 3 && courseFormRef">
-					<Badge v-if="courseFormRef.isDirty" theme="orange">
-						{{ __('Not Saved') }}
-					</Badge>
-					<Dropdown
-						:options="courseFormRef.courseMenu"
-						:button="{
-							icon: 'lucide-ellipsis',
-							variant: 'ghost',
-							label: __('Course options'),
-						}"
-						side="bottom"
-						align="end"
-					/>
-					<Tooltip
-						v-if="!courseFormRef.isDirty"
-						:text="__('No changes to save')"
-						:hoverDelay="0.1"
-					>
-						<Button variant="solid" :disabled="true">
-							{{ __('Save') }}
-						</Button>
-					</Tooltip>
-					<ShortcutTooltip v-else :label="__('Save')" combo="Mod+S">
-						<Button variant="solid" @click="courseFormRef.submitCourse()">
-							{{ __('Save') }}
-						</Button>
-					</ShortcutTooltip>
-				</template>
-				<template v-if="tabIndex === 2 && editorSelected">
-					<!-- Edit mode autosaves continuously, so there is no Save
-					     button or dirty badge here. -->
-					<Tooltip
-						v-if="courseEditorRef?.lessonHasVideo"
-						:text="__('Video Statistics')"
-					>
-						<Button
-							variant="ghost"
-							:label="__('Video Statistics')"
-							@click="courseEditorRef?.openVideoStats()"
-						>
-							<template #icon>
-								<span class="lucide-trending-up size-4" />
-							</template>
-						</Button>
-					</Tooltip>
-					<Tooltip :text="__('How to edit a lesson')">
-						<Button
-							variant="ghost"
-							:label="__('How to edit a lesson')"
-							@click="showLessonHelp = true"
-						>
-							<template #icon>
-								<span class="lucide-info size-4" />
-							</template>
-						</Button>
-					</Tooltip>
-					<router-link
-						:to="{
-							name: 'Lesson',
-							params: {
-								courseName: props.courseName,
-								chapterNumber: editorSelected.chapterNumber,
-								lessonNumber: editorSelected.lessonNumber,
-							},
-							query: { studentView: 1 },
-						}"
-					>
-						<Button variant="outline">
-							<template #prefix>
-								<span class="lucide-eye size-4" />
-							</template>
-							{{ __('Student View') }}
-						</Button>
-					</router-link>
-				</template>
+				<Dropdown
+					:options="courseOptions"
+					:button="{
+						icon: 'lucide-ellipsis',
+						variant: 'ghost',
+						label: __('Course options'),
+					}"
+					side="bottom"
+					align="end"
+				/>
 				<Button
-					v-if="tabIndex === 1 && course.data"
-					variant="outline"
-					@click="courseDashboardRef?.openEnrollModal()"
-				>
-					<template #prefix>
-						<span class="lucide-plus size-4" />
-					</template>
-					{{ __('Enroll') }}
-				</Button>
-				<Button
-					v-if="tabIndex === 3 && user.data?.is_moderator"
-					:variant="course.data?.published ? 'outline' : 'solid'"
+					v-if="user.data?.is_moderator && !isMobile"
+					:variant="course.data?.published ? 'subtle' : 'solid'"
 					:theme="course.data?.published ? 'red' : 'gray'"
 					:loading="publishToggle.loading"
 					@click="togglePublishCourse"
 				>
 					{{ course.data?.published ? __('Unpublish') : __('Publish') }}
 				</Button>
+				<Tooltip
+					v-if="!courseFormRef.isDirty"
+					:text="__('No changes to save')"
+					:hoverDelay="100"
+				>
+					<HeaderButton :label="__('Save')" variant="solid" disabled />
+				</Tooltip>
+				<ShortcutTooltip v-else :label="__('Save')" combo="Mod+S">
+					<HeaderButton
+						:label="__('Save')"
+						variant="solid"
+						@click="courseFormRef.submitCourse()"
+					/>
+				</ShortcutTooltip>
 			</template>
-		</LayoutHeader>
-		<LessonHelp v-model="showLessonHelp" />
+			<template v-if="tab?.key === 'editor' && editorSelected">
+				<Tooltip
+					v-if="courseEditorRef?.lessonHasVideo"
+					:text="__('Video Statistics')"
+				>
+					<Button
+						variant="ghost"
+						:label="__('Video Statistics')"
+						:class="isMobile ? '!size-9' : ''"
+						@click="courseEditorRef?.openVideoStats()"
+					>
+						<template #icon>
+							<span class="lucide-trending-up size-4" />
+						</template>
+					</Button>
+				</Tooltip>
+				<Tooltip v-if="!isMobile" :text="__('How to edit a lesson')">
+					<Button
+						variant="ghost"
+						class="text-p-base-medium"
+						:label="__('How to edit a lesson')"
+						@click="showLessonHelp = true"
+					>
+						<template #icon>
+							<span class="lucide-info size-4" />
+						</template>
+					</Button>
+				</Tooltip>
+				<template v-if="studentViewRoute">
+					<Tooltip v-if="isMobile" :text="__('Student View')">
+						<Button
+							variant="outline"
+							class="!size-9"
+							:label="__('Student View')"
+							:route="studentViewRoute"
+						>
+							<template #icon>
+								<span class="lucide-eye size-4" />
+							</template>
+						</Button>
+					</Tooltip>
+					<Button v-else variant="outline" :route="studentViewRoute">
+						<template #prefix>
+							<span class="lucide-eye size-4" />
+						</template>
+						{{ __('Student View') }}
+					</Button>
+				</template>
+			</template>
+			<Button
+				v-if="tab?.key === 'dashboard' && course.data && isMobile"
+				variant="outline"
+				class="!size-9"
+				:label="__('Enroll')"
+				:tooltip="__('Enroll')"
+				@click="openEnrollForm()"
+			>
+				<template #icon>
+					<span class="lucide-plus size-4" />
+				</template>
+			</Button>
+			<Button
+				v-else-if="tab?.key === 'dashboard' && course.data"
+				variant="outline"
+				@click="openEnrollForm()"
+			>
+				<template #prefix>
+					<span class="lucide-plus size-4" />
+				</template>
+				{{ __('Enroll') }}
+			</Button>
+		</template>
 
-		<div v-if="!isAdmin" class="flex-1 min-h-0">
+		<template #solo>
 			<CourseOverview v-if="course.data" :course="course" />
 			<SkeletonLoader v-else variant="course-page" />
-		</div>
-		<div v-else class="relative flex flex-1 min-h-0 flex-col">
-			<Tabs :tabs="tabs" v-model="tabIndex">
-				<template #tab-panel="{ tab }">
-					<template v-if="course.data">
-						<CourseEditor
-							v-if="tab.component === CourseEditor"
-							ref="courseEditorRef"
-							:course="course"
-							v-model:selected="editorSelected"
-						/>
-						<CourseForm
-							v-else-if="tab.component === CourseForm"
-							ref="courseFormRef"
-							:course="course"
-						/>
-						<CourseDashboard
-							v-else-if="tab.component === CourseDashboard"
-							ref="courseDashboardRef"
-							:course="course"
-						/>
-						<component v-else :is="tab.component" :course="course" />
-					</template>
-				</template>
-			</Tabs>
+		</template>
+
+		<template #tab-body-editor>
 			<div
-				v-if="tabIndex === 2 && course.data"
+				v-if="isMobile && editorSelected"
+				class="flex items-center gap-2 border-b bg-surface-base px-5 py-2.5"
+			>
+				<Button
+					variant="subtle"
+					class="!size-9"
+					:label="__('Previous lesson')"
+					:disabled="!courseEditorRef?.hasPrev"
+					@click="courseEditorRef?.goPrev()"
+				>
+					<template #icon>
+						<span class="lucide-chevron-left size-4" />
+					</template>
+				</Button>
+				<div
+					class="min-w-0 flex-1 text-center text-p-xs font-medium tabular-nums text-ink-gray-5"
+				>
+					<span v-if="courseEditorRef?.lessonTotal">
+						{{ courseEditorRef?.lessonIndex }} /
+						{{ courseEditorRef?.lessonTotal }}
+					</span>
+				</div>
+				<Button
+					variant="subtle"
+					class="!size-9"
+					:label="__('Next lesson')"
+					:disabled="!courseEditorRef?.hasNext"
+					@click="courseEditorRef?.goNext()"
+				>
+					<template #icon>
+						<span class="lucide-chevron-right size-4" />
+					</template>
+				</Button>
+			</div>
+			<CourseEditor
+				ref="courseEditorRef"
+				:course="course"
+				v-model:selected="editorSelected"
+			/>
+		</template>
+
+		<template #overlay="{ tab }">
+			<Button
+				v-if="
+					isMobile && tab?.key === 'editor' && courseEditorRef?.outlineVisible
+				"
+				variant="outline"
+				size="md"
+				class="absolute bottom-4 end-4 z-10 !h-11 !rounded-full !px-4 !shadow-lg"
+				@click="courseEditorRef?.openChapters()"
+			>
+				<template #prefix>
+					<span class="lucide-layers size-4" />
+				</template>
+				{{ __('Chapters') }}
+			</Button>
+
+			<div
+				v-if="
+					tab?.key === 'editor' &&
+					course.data &&
+					courseEditorRef?.outlineVisible
+				"
 				class="pointer-events-none absolute inset-x-0 top-0 z-10 hidden md:flex"
 			>
 				<div class="w-[70%]" />
+				<!-- h-12 is the tab strip's height: the bar sits level with it, so
+				     the two bottom borders have to meet. -->
 				<div
-					class="pointer-events-auto flex w-[30%] items-center justify-between gap-x-2 border-s border-b bg-surface-base p-1 px-5"
+					class="pointer-events-auto flex h-12 w-[30%] items-center justify-between gap-x-2 border-s border-b bg-surface-base px-5"
 				>
-					<div class="py-2.5 text-base-medium text-ink-gray-9">
+					<div class="text-p-base-medium text-ink-gray-9">
 						{{ __('Chapters') }}
 					</div>
 					<Button size="sm" @click="courseEditorRef?.openAddChapter()">
@@ -154,27 +209,32 @@
 					</Button>
 				</div>
 			</div>
-		</div>
-	</div>
+		</template>
+	</TabbedDetailPage>
+	<LessonHelp v-model="showLessonHelp" />
+
+	<router-view />
 </template>
 <script setup lang="ts">
-import { computed, inject, markRaw, onMounted, ref, watch } from 'vue'
-import type { ComputedRef, Ref } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import type { RouteLocationNormalizedLoadedGeneric, Router } from 'vue-router'
+import { computed, inject, markRaw, ref, useTemplateRef, watch } from 'vue'
+import type { ComputedRef } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import type { Router } from 'vue-router'
 import {
 	Badge,
-	Breadcrumbs,
 	Button,
 	createResource,
 	Dropdown,
-	Tabs,
 	Tooltip,
 	toast,
 	usePageMeta,
 } from 'frappe-ui'
+import type { FrappeResourceError } from 'frappe-ui'
 import { sessionStore } from '@/stores/session'
-import LayoutHeader from '@/components/Layouts/LayoutHeader.vue'
+import { useScreenSize } from '@/utils/composables'
+import { useTelemetry } from '@framework/ui/telemetry/index'
+import TabbedDetailPage from '@/components/Layouts/TabbedDetailPage.vue'
+import type { DetailTab } from '@/components/Layouts/TabbedDetailPage.vue'
 import CourseOverview from '@/pages/Courses/CourseOverview.vue'
 import SkeletonLoader from '@/components/SkeletonLoader.vue'
 import CourseDashboard from '@/pages/Courses/CourseDashboard.vue'
@@ -182,25 +242,18 @@ import CourseEditor from '@/pages/Courses/CourseEditor.vue'
 import CourseForm from '@/pages/Courses/CourseForm.vue'
 import LessonHelp from '@/components/LessonHelp.vue'
 import ShortcutTooltip from '@/components/ShortcutTooltip.vue'
-import type {
-	CourseDetails,
-	CourseInstructorInfo,
-	Resource,
-	SessionUser,
-} from '@/types'
+import HeaderButton from '@/components/HeaderButton.vue'
+import { openFormRoute } from '@/composables/useFormRoute'
+import type { CourseDetails, Resource, SessionUser } from '@/types'
+import { isInstructorOf } from '@/utils/instructors'
 
 type Brand = { name?: string; logo?: string; favicon?: string }
-interface TabDef {
-	label: string
-	component: ReturnType<typeof markRaw>
-	icon: string
-}
 
 const { brand } = sessionStore() as { brand: Brand }
 const router: Router = useRouter()
-const route: RouteLocationNormalizedLoadedGeneric = useRoute()
+const route = useRoute()
 const user = inject<SessionUser>('$user')!
-const tabIndex: Ref<number> = ref(0)
+const { isMobile } = useScreenSize()
 
 interface EditorSelection {
 	chapterNumber: string
@@ -212,23 +265,37 @@ interface EditorSelection {
 const editorSelected = ref<EditorSelection | null>(null)
 const showLessonHelp = ref(false)
 
-// Settings tab (CourseForm) exposes the API the LayoutHeader actions need.
+// A lesson just created has no position until the outline reload places it.
+const studentViewRoute = computed(() =>
+	editorSelected.value?.number
+		? {
+				name: 'Lesson',
+				params: {
+					courseName: props.courseName,
+					chapterNumber: editorSelected.value.chapterNumber,
+					lessonNumber: editorSelected.value.lessonNumber,
+				},
+				query: { studentView: 1 },
+		  }
+		: null
+)
+
 type CourseMenuItem = {
 	label: string
 	icon: string
 	theme?: string
 	onClick: () => void
 }
-// `isDirty` is exposed as a Ref (defineExpose doesn't unwrap); `courseMenu`
-// is a ComputedRef. Templates auto-unwrap both, but script-side access needs
-// the wrapped types so callers don't accidentally truth-check a Ref object.
 type CourseFormApi = {
-	isDirty: Ref<boolean>
+	isDirty: boolean
 	submitCourse: () => void
-	trashCourse: () => void
-	courseMenu: ComputedRef<CourseMenuItem[]>
+	courseMenu: CourseMenuItem[]
 }
-const courseFormRef = ref<CourseFormApi | null>(null)
+const page = useTemplateRef('page')
+
+const courseFormRef = computed<CourseFormApi | null>(
+	() => (page.value?.instanceFor('settings') ?? null) as CourseFormApi | null
+)
 
 type CourseEditorApi = {
 	saveSelectedLesson: () => void
@@ -236,10 +303,22 @@ type CourseEditorApi = {
 	lessonHasVideo: ComputedRef<boolean>
 	openVideoStats: () => void
 	openAddChapter: () => void
+	outlineVisible: ComputedRef<boolean>
+	lessonIndex: ComputedRef<number>
+	lessonTotal: ComputedRef<number>
+	hasPrev: ComputedRef<boolean>
+	hasNext: ComputedRef<boolean>
+	goPrev: () => void
+	goNext: () => void
+	openChapters: () => void
 }
 const courseEditorRef = ref<CourseEditorApi | null>(null)
-const courseDashboardRef = ref<{ openEnrollModal: () => void } | null>(null)
 
+type PublishResponse = {
+	__onload?: { quizzes_without_questions?: string[] }
+}
+
+const { capture } = useTelemetry()
 const publishToggle = createResource({
 	url: 'frappe.client.set_value',
 	makeParams() {
@@ -250,57 +329,71 @@ const publishToggle = createResource({
 			value: course.data?.published ? 0 : 1,
 		}
 	},
-	onSuccess() {
-		toast.success(
-			course.data?.published ? __('Course unpublished') : __('Course published')
-		)
+	onSuccess(data: PublishResponse) {
+		const published = !course.data?.published
+		capture(published ? 'course_published' : 'course_unpublished', {
+			course: course.data?.name,
+		})
+		toast.success(published ? __('Course published') : __('Course unpublished'))
+		const emptyQuizzes = data?.__onload?.quizzes_without_questions
+		if (emptyQuizzes?.length) {
+			toast.warning(
+				__(
+					'These quizzes have no questions, so learners skip them: {0}'
+				).format(emptyQuizzes.join(', '))
+			)
+		}
 		course.reload()
 	},
-	onError(err: { messages?: string[] } | string) {
-		const msg =
-			typeof err === 'string'
-				? err
-				: err.messages?.[0] ?? __('Could not update publish status')
+	onError(err: FrappeResourceError) {
+		const msg = err.messages?.[0] ?? __('Could not update publish status')
 		toast.error(msg)
 	},
 }) as Resource<unknown>
 
+// On a phone the publish toggle joins the ... menu, where it keeps a written
+// label. An icon-only globe gave no hint that it publishes the course.
+const courseOptions = computed<CourseMenuItem[]>(() => {
+	const menu = courseFormRef.value?.courseMenu ?? []
+	if (!isMobile.value || !user.data?.is_moderator) return menu
+	return [
+		{
+			label: course.data?.published
+				? __('Unpublish course')
+				: __('Publish course'),
+			icon: course.data?.published ? 'lucide-globe-lock' : 'lucide-globe',
+			onClick: () => togglePublishCourse(),
+		},
+		...menu,
+	]
+})
+
 function togglePublishCourse() {
 	publishToggle.submit()
+}
+
+// The enrollment form is a child route now, not a modal the dashboard tab owned,
+// so the button navigates instead of reaching into the tab instance. Hash and
+// query both travel: the hash names the tab this page returns to, and the query
+// holds CourseEditor's open lesson.
+function openEnrollForm() {
+	openFormRoute(router, {
+		name: 'NewCourseEnrollment',
+		params: { courseName: props.courseName },
+		hash: route.hash,
+		query: { ...route.query },
+	})
 }
 
 const props = defineProps<{
 	courseName: string
 }>()
 
-onMounted(() => {
-	updateTabIndex()
-})
-
-const updateTabIndex = () => {
-	const hash = route.hash
-	if (hash) {
-		tabs.value.forEach((tab, index) => {
-			if (tab.label?.toLowerCase() === hash.replace('#', '')) {
-				tabIndex.value = index
-			}
-		})
-	}
-}
-
-watch(tabIndex, () => {
-	const tab = tabs.value[tabIndex.value]
-	if (tab.label != route.hash.replace('#', '')) {
-		router.push({ ...route, hash: `#${tab.label.toLowerCase()}` })
-	}
-})
-
-// Switch tabs when the hash is changed programmatically (e.g. deep-links).
-watch(() => route.hash, updateTabIndex)
-
+// No `cache` key: it would be read once at setup, so the reload below (this
+// component is reused when you jump straight from one course to another) would
+// file the new course's data under the course you arrived on.
 const course = createResource({
 	url: 'lms.lms.utils.get_course_details',
-	cache: ['course', props.courseName],
 	makeParams() {
 		return {
 			course: props.courseName,
@@ -309,26 +402,37 @@ const course = createResource({
 	auto: true,
 }) as Resource<CourseDetails | null>
 
-const tabs = ref<TabDef[]>([
+const tabs = computed<DetailTab[]>(() => [
 	{
+		key: 'overview',
 		label: __('Overview'),
 		component: markRaw(CourseOverview),
 		icon: 'lucide-list',
+		when: isAdmin.value,
+		flow: true,
 	},
 	{
+		key: 'dashboard',
 		label: __('Dashboard'),
 		component: markRaw(CourseDashboard),
 		icon: 'lucide-trending-up',
+		when: isAdmin.value,
 	},
 	{
+		key: 'editor',
 		label: __('Course editor'),
+		shortLabel: __('Editor'),
 		component: markRaw(CourseEditor),
 		icon: 'lucide-book-open',
+		when: isAdmin.value,
 	},
 	{
+		key: 'settings',
 		label: __('Settings'),
 		component: markRaw(CourseForm),
 		icon: 'lucide-settings-2',
+		when: isAdmin.value,
+		flow: true,
 	},
 ])
 
@@ -340,22 +444,20 @@ watch(
 )
 
 watch(course, () => {
-	if (!isAdmin.value && !course.data?.published && !course.data?.upcoming) {
+	if (
+		!isAdmin.value &&
+		!course.data?.membership &&
+		!course.data?.published &&
+		!course.data?.upcoming
+	) {
 		router.push({
 			name: 'Courses',
 		})
 	}
 })
 
-const isInstructor = (): boolean => {
-	let user_is_instructor = false
-	course.data?.instructors.forEach((instructor: CourseInstructorInfo) => {
-		if (!user_is_instructor && instructor.name == user.data?.name) {
-			user_is_instructor = true
-		}
-	})
-	return user_is_instructor
-}
+const isInstructor = (): boolean =>
+	isInstructorOf(course.data?.instructors, user.data?.username)
 
 const isAdmin = computed<boolean>(() => {
 	return Boolean(user.data?.is_moderator) || isInstructor()
@@ -382,21 +484,3 @@ usePageMeta(() => {
 	}
 })
 </script>
-
-<style scoped>
-/* frappe-ui Tabs: TabsContent has no flex-1, so when the active panel's
-   content is intrinsically tall (Course editor with many lessons), the
-   flex-col layout shrinks the TabsList strip. Pin it so the strip keeps
-   its content height. */
-:deep([role='tablist']) {
-	flex-shrink: 0;
-}
-
-/* frappe-ui TabsContent is `flex flex-col` with no flex-1, so the active
-   panel collapses to its content height and the editor's `flex-1 min-h-0`
-   grid has no space to fill. Stretch the active panel to fill TabsRoot. */
-:deep([role='tabpanel'][data-state='active']) {
-	flex: 1 1 0%;
-	min-height: 0;
-}
-</style>

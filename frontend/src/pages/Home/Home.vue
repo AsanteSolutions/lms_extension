@@ -1,5 +1,5 @@
 <template>
-	<div class="w-full px-5 pt-5 pb-10">
+	<div class="w-full p-5">
 		<div class="space-y-2">
 			<div class="flex items-center justify-between">
 				<h1 class="text-2xl-bold text-ink-gray-9">
@@ -15,7 +15,7 @@
 								streakInfo.data?.current_streak || 0
 							)
 						"
-						class="bg-surface-amber-2 px-2 py-1 rounded-md cursor-pointer"
+						class="bg-surface-amber-2 px-2 py-1 rounded-5 cursor-pointer"
 					>
 						<span> 🔥 </span>
 						<span class="text-ink-gray-9">

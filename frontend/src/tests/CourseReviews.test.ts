@@ -1,5 +1,5 @@
 /**
- * CourseReviews.vue — review list rendering.
+ * CourseReviews.vue: review list rendering.
  *
  * Date guard: the "every review shows Today" bug came from the backend
  * overwriting `creation` with pretty_date() ("2 days ago"), which the frontend
@@ -21,7 +21,11 @@ type Review = {
 	owner: string
 	creation: string
 	review?: string
-	owner_details: { username: string; full_name: string; user_image: string } | null
+	owner_details: {
+		username: string
+		full_name: string
+		user_image: string
+	} | null
 }
 
 const review = (over: Partial<Review> & { name: string }): Review => ({
@@ -39,7 +43,11 @@ const DEFAULT_REVIEWS: Review[] = [
 		rating: 4,
 		creation: fmt(dayjs().subtract(1, 'day').subtract(1, 'hour')),
 	}),
-	review({ name: 'r-5-days', rating: 3, creation: fmt(dayjs().subtract(5, 'day')) }),
+	review({
+		name: 'r-5-days',
+		rating: 3,
+		creation: fmt(dayjs().subtract(5, 'day')),
+	}),
 	review({
 		name: 'r-2-months',
 		rating: 2,
@@ -54,20 +62,27 @@ let currentReviews: Review[] = DEFAULT_REVIEWS
 // frappe-ui's internal module resolution doesn't work under vitest; stub the
 // pieces CourseReviews uses. The reviews resource returns the fixture; the
 // has-reviewed count resource returns 0.
+let lastReviewsResourceOpts: { auto?: boolean } | undefined
+
 vi.mock('frappe-ui', () => ({
 	Button: { template: '<button><slot /></button>' },
-	createResource: (opts: { url: string }) =>
-		opts.url === 'lms.lms.utils.get_reviews'
-			? {
-					get data() {
-						return currentReviews
-					},
-					reload: vi.fn(),
-					refresh: vi.fn(),
-			  }
-			: { data: 0, reload: vi.fn(), refresh: vi.fn() },
+	createResource: (opts: { url: string; auto?: boolean }) => {
+		if (opts.url === 'lms.lms.utils.get_reviews') {
+			lastReviewsResourceOpts = opts
+			return {
+				get data() {
+					return currentReviews
+				},
+				reload: vi.fn(),
+				refresh: vi.fn(),
+			}
+		}
+		return { data: 0, reload: vi.fn(), refresh: vi.fn() }
+	},
 }))
-vi.mock('@/components/UserAvatar.vue', () => ({ default: { template: '<div />' } }))
+vi.mock('@/components/UserAvatar.vue', () => ({
+	default: { template: '<div />' },
+}))
 vi.mock('@/components/Modals/ReviewModal.vue', () => ({
 	default: { template: '<div />' },
 }))
@@ -115,6 +130,23 @@ describe('CourseReviews date rendering', () => {
 	})
 })
 
+describe('CourseReviews resource params', () => {
+	// A blank courseName sent `get_reviews` with no `course` arg at all,
+	// throwing a TypeError the backend has no handler for and crashing every
+	// later assertion in the same test file (frontend regression, 2026-09-11).
+	it('does not auto-fire get_reviews without a courseName', async () => {
+		mountReviews({ courseName: '' })
+		await flushPromises()
+		expect(lastReviewsResourceOpts?.auto).toBe(false)
+	})
+
+	it('auto-fires get_reviews once a courseName is present', async () => {
+		mountReviews({ courseName: 'C1' })
+		await flushPromises()
+		expect(lastReviewsResourceOpts?.auto).toBe(true)
+	})
+})
+
 describe('CourseReviews list rendering', () => {
 	it('drops reviews whose author record is missing', async () => {
 		currentReviews = [
@@ -147,7 +179,7 @@ describe('CourseReviews list rendering', () => {
 		const wrapper = mountReviews()
 		await flushPromises()
 		const row = wrapper.get('article')
-		expect(row.findAll('.fill-yellow-500')).toHaveLength(3)
+		expect(row.findAll('.fill-ink-amber-7')).toHaveLength(3)
 		expect(row.findAll('.fill-surface-gray-3')).toHaveLength(2)
 	})
 

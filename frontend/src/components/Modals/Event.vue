@@ -19,8 +19,7 @@
 						<Tooltip :text="__('Course')">
 							<a
 								:href="`/lms/courses/${event.course}`"
-								target="_blank"
-								rel="noopener noreferrer"
+								v-external
 								class="flex gap-x-2 w-fit cursor-pointer"
 							>
 								<span class="lucide-book-open h-4 w-4" />
@@ -32,8 +31,7 @@
 						<Tooltip v-if="event.batch_title" :text="__('Batch')">
 							<a
 								:href="`/lms/batches/${event.batch_name}#students`"
-								target="_blank"
-								rel="noopener noreferrer"
+								v-external
 								class="flex gap-x-2 w-fit cursor-pointer"
 							>
 								<span class="lucide-users h-4 w-4" />
@@ -56,6 +54,14 @@
 								<span>
 									{{ formatTime(event.start_time) }} -
 									{{ formatTime(event.end_time) }}
+								</span>
+							</div>
+						</Tooltip>
+						<Tooltip v-if="event.timezone" :text="__('Timezone')">
+							<div class="flex items-center gap-x-2 w-fit">
+								<span class="lucide-globe h-4 w-4" />
+								<span>
+									{{ formatTimezone(event.timezone, event.date) }}
 								</span>
 							</div>
 						</Tooltip>
@@ -85,10 +91,10 @@
 						</Button>
 					</div>
 				</div>
-				<Tabs :tabs="tabs" as="div" v-model="tabIndex" class="border-s w-1/2">
+				<Tabs :tabs="tabs" v-model="activeTab" class="border-s w-1/2">
 					<template #tab-panel="{ tab }">
 						<div
-							v-if="tab.label == 'Evaluation'"
+							v-if="tab.value === 'evaluation'"
 							class="flex flex-col space-y-4 p-5"
 						>
 							<div class="flex items-center justify-between">
@@ -97,16 +103,18 @@
 									:label="__('Rating')"
 									:disabled="!userIsEvaluator()"
 								/>
-								<FormControl
-									type="select"
-									:options="statusOptions"
-									v-model="evaluation.status"
-									:label="__('Status')"
-									class="w-1/2"
-									:disabled="!userIsEvaluator()"
-								/>
+								<div class="w-1/2">
+									<FormControl
+										type="select"
+										:options="statusOptions"
+										v-model="evaluation.status"
+										:label="__('Status')"
+										:disabled="!userIsEvaluator()"
+									/>
+								</div>
 							</div>
-							<Textarea
+							<FormControl
+								type="textarea"
 								v-model="evaluation.summary"
 								:label="__('Summary')"
 								:rows="7"
@@ -141,12 +149,14 @@
 							/>
 							<FormControl
 								type="date"
+								:format="dateFormat"
 								v-model="certificate.issue_date"
 								:disabled="!userIsEvaluator()"
 								:label="__('Issue Date')"
 							/>
 							<FormControl
 								type="date"
+								:format="dateFormat"
 								v-model="certificate.expiry_date"
 								:disabled="!userIsEvaluator()"
 								:label="__('Expiry Date')"
@@ -167,25 +177,28 @@
 </template>
 <script setup>
 import {
-	Dialog,
 	Button,
+	Dialog,
 	FormControl,
-	createResource,
+	Rating,
 	Tabs,
 	Tooltip,
-	Textarea,
+	createResource,
 	toast,
-	Rating,
 } from 'frappe-ui'
 import BooleanSwitch from '@/components/Controls/BooleanSwitch.vue'
 import { inject, reactive, watch, ref, computed } from 'vue'
 import { formatTime } from '@/utils'
+import { formatTimezone } from '@/utils/timezone'
+import { getDateFormat } from '@/utils/format'
 import Link from '@/components/Controls/Link.vue'
+import { openExternal } from '@/utils/openExternal'
 
 const show = defineModel()
 const user = inject('$user')
 const dayjs = inject('$dayjs')
-const tabIndex = ref(0)
+const activeTab = ref('evaluation')
+const dateFormat = getDateFormat()
 const showCertification = ref(false)
 const evaluation = reactive({})
 const certificate = reactive({})
@@ -225,7 +238,7 @@ const defaultTemplate = createResource({
 })
 
 const openCallLink = (link) => {
-	window.open(link, '_blank')
+	openExternal(link)
 }
 
 const evaluationResource = createResource({
@@ -257,6 +270,7 @@ const evaluationDetails = createResource({
 			filters: {
 				member: props.event.member,
 				course: props.event.course,
+				batch_name: props.event.batch_name || ['is', 'not set'],
 			},
 		}
 	},
@@ -319,6 +333,7 @@ const certificateDetails = createResource({
 			filters: {
 				member: props.event.member,
 				course: props.event.course,
+				batch_name: props.event.batch_name || ['is', 'not set'],
 			},
 		}
 	},
@@ -366,10 +381,10 @@ watch(show, () => {
 })
 
 const openCertificate = (certificate) => {
-	window.open(
+	openExternal(
 		`/api/method/frappe.utils.print_format.download_pdf?doctype=LMS+Certificate&name=${
 			certificate.name
-		}&format=${encodeURIComponent(certificate.template)}`
+		}&format=${encodeURIComponent(certificate.template)}&no_letterhead=1`
 	)
 }
 
@@ -397,15 +412,17 @@ const statusOptions = computed(() => {
 const tabs = computed(() => {
 	const tabsArray = [
 		{
+			value: 'evaluation',
 			label: __('Evaluation'),
-			icon: 'lucide-clipboard-list',
+			iconLeft: 'lucide-clipboard-list',
 		},
 	]
 
 	if (showCertification.value) {
 		tabsArray.push({
+			value: 'certification',
 			label: __('Certification'),
-			icon: 'lucide-graduation-cap',
+			iconLeft: 'lucide-graduation-cap',
 		})
 	}
 

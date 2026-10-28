@@ -1,9 +1,6 @@
 <template>
 	<SettingsLayout
 		:title="title"
-		:description="
-			__('Configure the credentials and options for this payment gateway.')
-		"
 		:show-back="true"
 		@back="emit('updateStep', 'list')"
 	>
@@ -22,7 +19,7 @@
 				<div class="flex flex-col">
 					<div class="text-p-base-medium text-ink-gray-7">
 						{{ __('Select Payment Gateway') }}
-						<span class="text-ink-red-6">*</span>
+						<span class="text-ink-red-5">*</span>
 					</div>
 					<div class="text-p-sm text-ink-gray-5">
 						{{ __('Choose a payment provider to configure its credentials.') }}
@@ -64,9 +61,7 @@ const props = defineProps<{
 }>()
 
 const title = computed(() =>
-	props.gatewayID === 'new'
-		? __('New Payment Gateway')
-		: __('Edit Payment Gateway')
+	props.gatewayID === 'new' ? __('New Payment Gateway') : props.gatewayID || ''
 )
 
 const paymentGateway = createResource({
@@ -77,6 +72,7 @@ const paymentGateway = createResource({
 		}
 	},
 	transform(data: any) {
+		maskCredentials(data.fields, data.doctype)
 		arrangeFields(data.fields)
 		data.sections = makeSections(data.fields)
 		return data
@@ -91,6 +87,16 @@ const allGateways = createListResource({
 	fields: ['name', 'issingle'],
 })
 
+// Which gateways already exist has to come from its own unfiltered, unpaged
+// query. Reading it off the list panel's resource meant a search term or the
+// 13-row page hid a configured gateway, and offering it again overwrites its
+// credentials.
+const configuredGateways = createListResource({
+	doctype: 'Payment Gateway',
+	fields: ['name'],
+	pageLength: 0,
+})
+
 const gatewayFields = createResource({
 	url: 'lms.lms.api.get_new_gateway_fields',
 	makeParams(values: any) {
@@ -99,6 +105,43 @@ const gatewayFields = createResource({
 		}
 	},
 })
+
+/**
+ * Credential-shaped names. The provider doctypes type their secrets
+ * inconsistently (GoCardless' `access_token` and `webhooks_secret`, Mpesa's
+ * `consumer_key` and Braintree's `public_key` are all plain `Data`), so the
+ * fieldtype cannot be trusted on its own. This defaults to masking, because
+ * the safe failure is a hidden field rather than a leaked one.
+ *
+ * Presentation only. A Data field is still stored unencrypted: the fieldtype
+ * is what routes a value into Frappe's encrypted store, and those doctypes
+ * belong to the payments app, not here.
+ */
+const CREDENTIAL_NAME = /secret|token|password|passphrase|salt|key/i
+
+/**
+ * The credentials that are public on purpose and have to stay readable:
+ * Stripe publishes its key to the browser, and Razorpay's `api_key` is the
+ * `key_id` its checkout script takes.
+ */
+const PUBLIC_CREDENTIALS = new Set([
+	'Stripe Settings.publishable_key',
+	'Razorpay Settings.api_key',
+])
+
+const TEXT_TYPES = ['Data', 'Password', 'Small Text']
+
+// SettingFields draws a `password` field with frappe-ui's Password.
+const maskCredentials = (fields: any[], doctype: string) => {
+	for (const field of fields) {
+		if (!TEXT_TYPES.includes(field.type)) continue
+		const secret =
+			field.type === 'Password' ||
+			(CREDENTIAL_NAME.test(field.name) &&
+				!PUBLIC_CREDENTIALS.has(`${doctype}.${field.name}`))
+		if (secret) field.type = 'password'
+	}
+}
 
 const arrangeFields = (fields: any[]) => {
 	fields = fields.sort((a, b) => {
@@ -118,6 +161,7 @@ watch(
 			paymentGateway.reload()
 		} else if (props.gatewayID == 'new') {
 			allGateways.reload()
+			configuredGateways.reload()
 		}
 	},
 	{ immediate: true }
@@ -133,6 +177,7 @@ watch(newGateway, () => {
 	let gatewayDoc = getNewGateway()
 	gatewayFields.reload({ doctype: gatewayDoc.name }).then(() => {
 		let fields = gatewayFields.data || []
+		maskCredentials(fields, gatewayDoc.name)
 		arrangeFields(fields)
 		newGatewayFields.value = makeSections(fields)
 		prepareGatewayData(fields)
@@ -199,7 +244,7 @@ const allGatewayOptions = computed(() => {
 	gatewayList.forEach((gateway: any) => {
 		let gatewayName = gateway.split(' ')[0]
 		let existingGateways =
-			paymentGateways.value?.data?.map((pg: any) => pg.name) || []
+			configuredGateways.data?.map((pg: any) => pg.name) || []
 		if (
 			!options.includes(gatewayName) &&
 			!existingGateways.includes(gatewayName)

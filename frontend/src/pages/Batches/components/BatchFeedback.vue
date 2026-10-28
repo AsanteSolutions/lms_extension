@@ -15,6 +15,7 @@
 			<Button
 				v-if="feedbackList.data?.length && isAdmin"
 				variant="outline"
+				class="text-p-base-medium"
 				@click="showAllFeedback = true"
 			>
 				{{ __('View all feedback') }}
@@ -103,6 +104,12 @@ const props = defineProps({
 		type: String,
 		required: true,
 	},
+	// Per-batch: a Course Creator only manages a batch they author, unlike the
+	// session-wide user.data.is_instructor.
+	canManage: {
+		type: Boolean,
+		default: false,
+	},
 })
 
 onMounted(() => {
@@ -185,6 +192,6 @@ const submitFeedback = () => {
 }
 
 const isAdmin = computed(() => {
-	return user.data?.is_moderator || user.data?.is_evaluator
+	return user.data?.is_moderator || user.data?.is_evaluator || props.canManage
 })
 </script>

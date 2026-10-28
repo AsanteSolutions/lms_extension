@@ -1,9 +1,6 @@
 <template>
 	<SettingsLayout
 		:title="__('Setup Email')"
-		:description="
-			__('Choose the email service provider you want to configure.')
-		"
 		:show-back="true"
 		@back="emit('update:step', 'email-list')"
 	>
@@ -36,17 +33,14 @@
 			<div v-if="selectedService" class="flex flex-col gap-4">
 				<!-- email service provider info -->
 				<div
-					class="flex items-center gap-2 rounded-md p-2 text-ink-gray-6 ring-1 ring-outline-gray-3"
+					class="flex items-center gap-2 rounded-5 p-2 text-ink-gray-6 ring-1 ring-outline-gray-3"
 				>
 					<CircleAlert class="size-5 shrink-0" />
 					<div class="text-wrap text-p-xs">
 						{{ selectedService.info }}
-						<a
-							:href="selectedService.link"
-							target="_blank"
-							rel="noopener noreferrer"
-							class="underline"
-							>{{ __('here') }}</a
+						<a :href="selectedService.link" v-external class="underline">{{
+							__('here')
+						}}</a
 						>.
 					</div>
 				</div>
@@ -79,7 +73,7 @@
 							:description="field.description"
 						/>
 					</div>
-					<ErrorMessage v-if="error" class="ml-1" :message="error" />
+					<ErrorMessage v-if="error" class="ms-1" :message="error" />
 				</div>
 			</div>
 		</div>
@@ -88,7 +82,7 @@
 
 <script setup lang="ts">
 import SettingsLayout from '@/components/Layouts/SettingsLayout.vue'
-import { useTelemetry } from 'frappe-ui/frappe'
+import { useTelemetry } from '@framework/ui/telemetry/index'
 import { EmailAccount, EmailService, EmailStep } from '@/types'
 import {
 	Button,
@@ -160,7 +154,7 @@ function handleSelect(service: EmailService) {
 	state.service = service.name
 }
 
-// shared cached accounts list — reload it so the new account shows on return
+// shared cached accounts list; reload it so the new account shows on return
 const emailAccounts = createListResource({
 	doctype: 'Email Account',
 	cache: ['Email Accounts'],

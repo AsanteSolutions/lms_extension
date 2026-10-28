@@ -1,10 +1,8 @@
 <template>
 	<SettingsLayout
 		:title="title"
-		:description="
-			__('Define a badge and the criteria for awarding it to learners.')
-		"
 		:show-back="true"
+		v-model:enabled="badge.enabled"
 		@back="emit('updateStep', 'list')"
 	>
 		<template #header-actions>
@@ -12,14 +10,8 @@
 				__('Save')
 			}}</Button>
 		</template>
-		<div class="grid grid-cols-2 gap-x-5">
+		<div class="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-4 md:gap-y-0">
 			<div class="space-y-4">
-				<BooleanSwitch
-					size="sm"
-					v-model="badge.enabled"
-					:label="__('Enabled')"
-					:description="__('Allow this badge to be awarded to learners.')"
-				/>
 				<FormControl
 					v-model="badge.title"
 					:label="__('Title')"
@@ -31,8 +23,9 @@
 					:modelValue="badge.reference_doctype"
 					:options="referenceDoctypeOptions"
 					:label="__('Assign For')"
+					:required="true"
 					@update:modelValue="
-						(opt: any) => (badge.reference_doctype = opt.value)
+						(value: string | null) => (badge.reference_doctype = value ?? '')
 					"
 				/>
 				<FormControl
@@ -70,14 +63,17 @@
 					:required="true"
 					class="w-full"
 				/>
-				<CodeEditor
-					v-model="badge.condition"
-					:label="__('Condition')"
-					type="JavaScript"
-					:required="true"
-					:showBorder="true"
-					height="82px"
-				/>
+				<div>
+					<SettingsCodeField
+						v-model="badge.condition"
+						:field="{
+							label: 'Condition',
+							mode: 'javascript',
+							reqd: true,
+							rows: 3,
+						}"
+					/>
+				</div>
 			</div>
 			<div class="space-y-4"></div>
 		</div>
@@ -85,11 +81,11 @@
 </template>
 <script setup lang="ts">
 import { Combobox, Button, call, FormControl, toast } from 'frappe-ui'
+import SettingsCodeField from '@/components/Layouts/SettingsCodeField.vue'
 import BooleanSwitch from '@/components/Controls/BooleanSwitch.vue'
 import { computed, ref, watch } from 'vue'
 import { cleanError } from '@/utils'
 import type { Badges, Badge } from '@/types'
-import CodeEditor from '@/components/Controls/CodeEditor.vue'
 import Uploader from '@/components/Controls/Uploader.vue'
 import SettingsLayout from '@/components/Layouts/SettingsLayout.vue'
 import Select from '@/components/Controls/Select.vue'
@@ -118,15 +114,15 @@ const props = defineProps<{
 
 const title = computed(() =>
 	props.badgeName && props.badgeName !== 'new'
-		? __('Edit Badge')
-		: __('Create a new Badge')
+		? badge.value?.title || props.badgeName
+		: __('New Badge')
 )
 
 watch(
 	() => props.badgeName,
 	(val) => {
 		if (val != 'new') {
-			badges.value?.data.forEach((bdg: Badge) => {
+			badges.value?.data?.forEach((bdg: Badge) => {
 				if (bdg.name === val) {
 					badge.value = bdg
 				}
@@ -206,7 +202,7 @@ const createBadge = () => {
 			onError(err) {
 				saving.value = false
 				emit('updateStep', 'list')
-				toast.error(cleanError(err.messages[0]) || __('Error creating badge'))
+				toast.error(cleanError(err.messages?.[0]) || __('Error creating badge'))
 			},
 		}
 	)
