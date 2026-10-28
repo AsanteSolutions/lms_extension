@@ -250,3 +250,8 @@ app_license = "mit"
 # List of apps whose translatable strings should be excluded from this app's translations.
 # ignore_translatable_strings_from = []
 
+
+# Signup
+# ------
+# Overrides lms's signup form so the category select loads from lms_extension's assets.
+signup_form_template = "lms_extension.plugins.show_custom_signup"
