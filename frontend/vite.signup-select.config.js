@@ -6,7 +6,7 @@ import path from 'node:path'
 import frappeui from 'frappe-ui/vite'
 
 export default defineConfig({
-	base: '/assets/lms/frontend/signup-select/',
+	base: '/assets/lms_extension/frontend/signup-select/',
 	plugins: [
 		frappeui({
 			frappeProxy: false,
@@ -41,7 +41,7 @@ export default defineConfig({
 		},
 	},
 	build: {
-		outDir: '../lms/public/frontend/signup-select',
+		outDir: '../lms_extension/public/frontend/signup-select',
 		emptyOutDir: true,
 		assetsInlineLimit: 0,
 		cssCodeSplit: false,
