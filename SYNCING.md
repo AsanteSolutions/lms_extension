@@ -9,9 +9,9 @@ refreshed and the Asante changes reapplied.
 | | |
 |---|---|
 | Upstream repo | `frappe/lms`, checked out next to this app at `../lms` |
-| Branch | `main` |
-| Commit | `c51661b164acd7df87e54a6d8d47a4e67985ff68` (`v2.67.1`) |
-| Minimum Frappe | `version-16` at 16.54.0 or newer (the frontend links `@framework/ui` to `../../frappe/ui`) |
+| Branch | `version-16` |
+| Commit | `bab30db8a91543b9196c2fe76d635279cae3a918` (`v16.1.0`) |
+| Minimum Frappe | `version-16`; last built against 16.56.0 (the frontend links `@framework/ui` to `../../frappe/ui`) |
 
 Update this table on every sync.
 
@@ -42,7 +42,8 @@ sync should be either a pure upstream snapshot or code that exists only in this 
 |---|---|---|
 | `frontend/package.json`, `frontend/vite.config.js`, `frontend/vite.signup-select.config.js` | Build paths `lms` → `lms_extension` | The extension serves its own build from `/assets/lms_extension/frontend/` |
 | `lms_extension/templates/signup-form.html` | Asset paths `lms` → `lms_extension` | Loads the signup-select bundle this app builds |
-| `frontend/src/pages/Courses/Courses.vue` | Students default to the Enrolled tab; instructors (who are not moderators, evaluators or system managers) only see courses they teach; staff get Live / New / Upcoming / Created / Unpublished tabs | Institutes' course visibility rules |
+| `frontend/src/pages/Courses/Courses.vue` | Students default to the Enrolled tab; instructors (who are not moderators, evaluators or system managers) only see courses they are listed as an instructor on, whoever created them, by sending upstream's `created` filter on every tab (`updateInstructorFilter`); staff get Live / New / Upcoming / Created / Unpublished tabs | Institutes' course visibility rules. Filtering on the server, not in the browser, keeps paging and the footer count right and lets lecturers see their own drafts (the server hides drafts from non-moderators unless the list is scoped to their own courses) |
+| `frontend/src/tests/coursesFilters.test.ts` | Tests for the lecturer scoping above, appended at the end of the file | Covers the Courses.vue change |
 | `frontend/src/utils/index.js` | "Student Portal" sidebar item linking to `/student-portal` | Link to the institutes' student portal (outside the SPA) |
 
 Code that exists only in this app (no conflicts on sync, but check it still fits):
@@ -58,11 +59,14 @@ Code that exists only in this app (no conflicts on sync, but check it still fits
 
 Don't reintroduce these when resolving conflicts:
 
+- Lecturer course filtering in the browser (a `transform` on the `courses` list resource in
+  `Courses.vue`): replaced by the server-side `created` filter in the 16.1.0 sync.
 - Assignment due date (`custom_due_date` in `Assignment.vue`, `AssignmentForm.vue`,
   `Assignments.vue`): replaced by upstream assignment scheduling in v2.67.
 - Mobile fallback for non-route links (`MobileLayout.vue` `handleClick`): upstream's phone shell
   lists sidebar links on the You page and already handles links outside the SPA
-  (`components/Settings/youRows.ts` `destinationRow`).
+  (`components/Settings/Mobile/mobileRows.ts` `destinationRow`; "Student Portal" lands in the
+  You page's Pages group as an `href` to `/student-portal`).
 
 ## How to sync
 
@@ -70,14 +74,19 @@ Run from this app's directory (`apps/lms_extension`). Use a branch.
 
 1. **Update upstream and pick the target commit.**
    ```bash
-   git -C ../lms fetch upstream && git -C ../lms checkout main && git -C ../lms pull --ff-only
-   NEW=$(git -C ../lms rev-parse HEAD)
+   git -C ../lms fetch upstream version-16
+   NEW=$(git -C ../lms rev-parse upstream/version-16)
    OLD=<commit from the table above>
    ```
+   Upstream publishes `version-16` as squashed release commits, so `$OLD` is usually not an
+   ancestor of `$NEW` and `pull --ff-only` fails. Nothing below needs `../lms` checked out at
+   `$NEW`: every step reads from the commit directly.
 
 2. **See what upstream changed in the files Asante touches.** Read this before resolving conflicts.
+   Because of the squashing, compare contents with `git diff` (a `git log` range shows nothing
+   useful).
    ```bash
-   git -C ../lms log --oneline $OLD..$NEW -- \
+   git -C ../lms diff $OLD $NEW -- \
      frontend/package.json frontend/vite.config.js frontend/vite.signup-select.config.js \
      frontend/src/pages/Courses/Courses.vue frontend/src/utils/index.js \
      lms/templates/signup-form.html lms/plugins.py lms/www
@@ -92,9 +101,9 @@ Run from this app's directory (`apps/lms_extension`). Use a branch.
    find frontend -mindepth 1 -type d -empty -not -path 'frontend/node_modules*' -delete
    git -C ../lms archive $NEW frontend | tar -x -C .
    for f in _lms.py certificate.py certificate.html new-sign-up.html; do
-     cp ../lms/lms/www/$f lms_extension/www/$f
+     git -C ../lms show $NEW:lms/www/$f > lms_extension/www/$f
    done
-   cp ../lms/lms/templates/signup-form.html lms_extension/templates/signup-form.html
+   git -C ../lms show $NEW:lms/templates/signup-form.html > lms_extension/templates/signup-form.html
    git add -A frontend lms_extension/www lms_extension/templates/signup-form.html
    git commit -m "Update to match frappe lms <version>" -m "Upstream: frappe/lms@$NEW"
    ```
