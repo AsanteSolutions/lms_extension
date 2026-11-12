@@ -125,7 +125,7 @@ const setCertification = (value) => {
 	updateCourses()
 }
 const filters = ref({})
-const currentTab = ref('live')
+const currentTab = user.data?.is_student ? ref('enrolled') : ref('live')
 const { brand } = sessionStore()
 const router = useRouter()
 
@@ -241,8 +241,24 @@ const updateFilters = () => {
 	updateTitleFilter()
 	updateCertificationFilter()
 	updateTabFilter()
+	updateInstructorFilter()
 	updateStudentFilter()
 	setQueryParams()
+}
+
+// Lecturers only see the courses they are listed as an instructor on, whoever
+// created them. `created` resolves on the server to the caller's Course
+// Instructor rows, so paging, the footer count and drafts all follow it.
+// After updateTabFilter, which clears `created` for every tab but its own.
+const updateInstructorFilter = () => {
+	if (
+		user.data?.is_instructor &&
+		!user.data?.is_system_manager &&
+		!user.data?.is_moderator &&
+		!user.data?.is_evaluator
+	) {
+		filters.value['created'] = 1
+	}
 }
 
 const updateCategoryFilter = () => {
@@ -342,21 +358,24 @@ watch(currentTab, () => {
 })
 
 const courseTabs = computed(() => {
-	let tabs = [
-		{
-			label: __('Published'),
-			value: 'live',
-		},
-		{
-			label: __('Upcoming'),
-			value: 'upcoming',
-		},
-	]
+	let tabs = []
 	if (
 		user.data?.is_moderator ||
 		user.data?.is_instructor ||
 		user.data?.is_evaluator
 	) {
+		tabs.push({
+			label: __('Live'),
+			value: 'live',
+		})
+		tabs.push({
+			label: __('New'),
+			value: 'new',
+		})
+		tabs.push({
+			label: __('Upcoming'),
+			value: 'upcoming',
+		})
 		tabs.push({ label: __('Created'), value: 'created' })
 		tabs.push({ label: __('Unpublished'), value: 'unpublished' })
 	} else if (user.data) {

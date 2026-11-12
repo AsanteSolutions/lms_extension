@@ -378,3 +378,32 @@ describe('Courses list filters', () => {
 		).toBeUndefined()
 	})
 })
+
+// Asante: a lecturer (an instructor who is not also a moderator, evaluator or
+// system manager) only sees courses they are listed as an instructor on. The
+// server resolves `created` to the caller's Course Instructor rows, so asking
+// for it on every tab keeps paging, the count and drafts scoped to them.
+describe('Courses list for a lecturer', () => {
+	const LECTURER = { name: 'lecturer@test.com', is_instructor: true }
+
+	it('scopes every tab to the courses they teach', async () => {
+		const wrapper = await mountCourses({ data: { ...LECTURER } })
+		expect(requests.current[0].filters).toMatchObject({ live: 1, created: 1 })
+
+		for (const tab of ['new', 'upcoming', 'created', 'unpublished']) {
+			await wrapper.find(`[data-testid="tab-${tab}"]`).trigger('click')
+			await nextTick()
+			expect(requests.current.at(-1).filters).toMatchObject({ created: 1 })
+		}
+		// Unpublished asks for their drafts, not for published courses.
+		expect(requests.current.at(-1).filters).toMatchObject({ published: 0 })
+	})
+
+	it('does not scope instructors who also hold a staff role', async () => {
+		for (const role of ['is_moderator', 'is_evaluator', 'is_system_manager']) {
+			requests.current.length = 0
+			await mountCourses({ data: { ...LECTURER, [role]: true } })
+			expect(requests.current[0].filters).not.toHaveProperty('created')
+		}
+	})
+})

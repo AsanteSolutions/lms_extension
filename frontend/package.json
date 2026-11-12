@@ -6,9 +6,9 @@
 	"scripts": {
 		"dev": "vite",
 		"serve": "vite preview",
-		"build": "vite build --base=/assets/lms/frontend/ && yarn copy-html-entry && yarn build:signup-select",
+		"build": "vite build --base=/assets/lms_extension/frontend/ && yarn copy-html-entry && yarn build:signup-select",
 		"build:signup-select": "vite build --config vite.signup-select.config.js",
-		"copy-html-entry": "cp ../lms/public/frontend/index.html ../lms/www/_lms.html",
+		"copy-html-entry": "cp ../lms_extension/public/frontend/index.html ../lms_extension/www/_lms.html",
 		"test": "vitest run",
 		"test:watch": "vitest"
 	},
