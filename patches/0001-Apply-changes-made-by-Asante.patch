@@ -1,37 +1,20 @@
-From 4fb6b5b08ad35a954d60102f1d0ba113c3eedb99 Mon Sep 17 00:00:00 2001
+From c43956dbdc9788809ceff00648855f342ae46058 Mon Sep 17 00:00:00 2001
 From: Apile Tyumre <apile@asantesolutions.co.za>
-Date: Wed, 28 Oct 2026 13:32:18 +0200
+Date: Thu, 12 Nov 2026 14:18:43 +0200
 Subject: [PATCH] Apply changes made by Asante
 
-Asante's changes to files copied from frappe/lms. This is the only
-commit in the sync that edits upstream-derived files; it is exported
-as patches/0001-Apply-changes-made-by-Asante.patch. See SYNCING.md for
-why each change exists.
-
-- Build and asset paths point at lms_extension (package.json,
-  vite.config.js, vite.signup-select.config.js, signup-form.html)
-- Courses: students open on Enrolled; instructors only see courses
-  they teach; staff get Live/New/Upcoming/Created/Unpublished tabs
-- Sidebar: Student Portal link
-
-Dropped from the previous patch because upstream now covers them:
-- Assignment due date (custom_due_date): replaced by upstream's
-  assignment scheduling
-- MobileLayout fallback for non-route links: the new phone shell lists
-  them on the You page and handles external links itself
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
- frontend/package.json                    |  4 +--
- frontend/src/pages/Courses/Courses.vue   | 41 +++++++++++++++++-------
- frontend/src/utils/index.js              |  5 +++
- frontend/vite.config.js                  |  4 +--
- frontend/vite.signup-select.config.js    |  4 +--
- lms_extension/templates/signup-form.html |  4 +--
- 6 files changed, 43 insertions(+), 19 deletions(-)
+ frontend/package.json                     |  4 +--
+ frontend/src/pages/Courses/Courses.vue    | 41 +++++++++++++++++------
+ frontend/src/tests/coursesFilters.test.ts | 29 ++++++++++++++++
+ frontend/src/utils/index.js               |  5 +++
+ frontend/vite.config.js                   |  4 +--
+ frontend/vite.signup-select.config.js     |  4 +--
+ lms_extension/templates/signup-form.html  |  4 +--
+ 7 files changed, 72 insertions(+), 19 deletions(-)
 
 diff --git a/frontend/package.json b/frontend/package.json
-index 2293235..a009833 100644
+index ad0ea67..1c34d89 100644
 --- a/frontend/package.json
 +++ b/frontend/package.json
 @@ -6,9 +6,9 @@
@@ -47,10 +30,10 @@ index 2293235..a009833 100644
  		"test:watch": "vitest"
  	},
 diff --git a/frontend/src/pages/Courses/Courses.vue b/frontend/src/pages/Courses/Courses.vue
-index 9ece4bc..126a0d7 100644
+index d685b4f..d1a00c1 100644
 --- a/frontend/src/pages/Courses/Courses.vue
 +++ b/frontend/src/pages/Courses/Courses.vue
-@@ -109,7 +109,7 @@ const setCertification = (value) => {
+@@ -125,7 +125,7 @@ const setCertification = (value) => {
  	updateCourses()
  }
  const filters = ref({})
@@ -59,30 +42,34 @@ index 9ece4bc..126a0d7 100644
  const { brand } = sessionStore()
  const router = useRouter()
  
-@@ -144,6 +144,22 @@ const courses = createListResource({
- 	cache: ['courses', user.data?.name],
- 	pageLength: 24,
- 	start: start.value,
-+	transform(data) {
-+		if (
-+			user.data?.is_instructor &&
-+			!user.data?.is_system_manager &&
-+			!user.data?.is_moderator &&
-+			!user.data?.is_evaluator
-+		) {
-+			return data.filter((element) => {
-+				return element.instructors.some(
-+					(instructor) => instructor.name === user.data?.name
-+				)
-+			})
-+		}
-+
-+		return data
-+	},
- })
+@@ -241,10 +241,26 @@ const updateFilters = () => {
+ 	updateTitleFilter()
+ 	updateCertificationFilter()
+ 	updateTabFilter()
++	updateInstructorFilter()
+ 	updateStudentFilter()
+ 	setQueryParams()
+ }
  
- // The tabs filter on `enrolled`, `created` and `live`, which are not fields,
-@@ -318,21 +334,24 @@ watch(currentTab, () => {
++// Lecturers only see the courses they are listed as an instructor on, whoever
++// created them. `created` resolves on the server to the caller's Course
++// Instructor rows, so paging, the footer count and drafts all follow it.
++// After updateTabFilter, which clears `created` for every tab but its own.
++const updateInstructorFilter = () => {
++	if (
++		user.data?.is_instructor &&
++		!user.data?.is_system_manager &&
++		!user.data?.is_moderator &&
++		!user.data?.is_evaluator
++	) {
++		filters.value['created'] = 1
++	}
++}
++
+ const updateCategoryFilter = () => {
+ 	if (currentCategory.value) {
+ 		filters.value['category'] = currentCategory.value
+@@ -342,21 +358,24 @@ watch(currentTab, () => {
  })
  
  const courseTabs = computed(() => {
@@ -117,11 +104,48 @@ index 9ece4bc..126a0d7 100644
  		tabs.push({ label: __('Created'), value: 'created' })
  		tabs.push({ label: __('Unpublished'), value: 'unpublished' })
  	} else if (user.data) {
+diff --git a/frontend/src/tests/coursesFilters.test.ts b/frontend/src/tests/coursesFilters.test.ts
+index 9e08aed..4763698 100644
+--- a/frontend/src/tests/coursesFilters.test.ts
++++ b/frontend/src/tests/coursesFilters.test.ts
+@@ -378,3 +378,32 @@ describe('Courses list filters', () => {
+ 		).toBeUndefined()
+ 	})
+ })
++
++// Asante: a lecturer (an instructor who is not also a moderator, evaluator or
++// system manager) only sees courses they are listed as an instructor on. The
++// server resolves `created` to the caller's Course Instructor rows, so asking
++// for it on every tab keeps paging, the count and drafts scoped to them.
++describe('Courses list for a lecturer', () => {
++	const LECTURER = { name: 'lecturer@test.com', is_instructor: true }
++
++	it('scopes every tab to the courses they teach', async () => {
++		const wrapper = await mountCourses({ data: { ...LECTURER } })
++		expect(requests.current[0].filters).toMatchObject({ live: 1, created: 1 })
++
++		for (const tab of ['new', 'upcoming', 'created', 'unpublished']) {
++			await wrapper.find(`[data-testid="tab-${tab}"]`).trigger('click')
++			await nextTick()
++			expect(requests.current.at(-1).filters).toMatchObject({ created: 1 })
++		}
++		// Unpublished asks for their drafts, not for published courses.
++		expect(requests.current.at(-1).filters).toMatchObject({ published: 0 })
++	})
++
++	it('does not scope instructors who also hold a staff role', async () => {
++		for (const role of ['is_moderator', 'is_evaluator', 'is_system_manager']) {
++			requests.current.length = 0
++			await mountCourses({ data: { ...LECTURER, [role]: true } })
++			expect(requests.current[0].filters).not.toHaveProperty('created')
++		}
++	})
++})
 diff --git a/frontend/src/utils/index.js b/frontend/src/utils/index.js
-index 26e258f..2d00b7f 100644
+index 5b89ba7..7d3f4df 100644
 --- a/frontend/src/utils/index.js
 +++ b/frontend/src/utils/index.js
-@@ -565,6 +565,11 @@ const getSidebarItems = (forMobile = false) => {
+@@ -573,6 +573,11 @@ const getSidebarItems = (forMobile = false) => {
  					to: 'Statistics',
  					activeFor: ['Statistics'],
  				},
@@ -178,10 +202,10 @@ index 572601e..cd31f16 100644
  		assetsInlineLimit: 0,
  		cssCodeSplit: false,
 diff --git a/lms_extension/templates/signup-form.html b/lms_extension/templates/signup-form.html
-index 5b072f1..4b8ac66 100644
+index 130afbb..53d320a 100644
 --- a/lms_extension/templates/signup-form.html
 +++ b/lms_extension/templates/signup-form.html
-@@ -69,8 +69,8 @@
+@@ -67,8 +67,8 @@
  </form>
  
  {% if user_category %}
