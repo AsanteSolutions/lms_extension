@@ -98,8 +98,8 @@
 				<HeaderButton
 					v-if="assignmentID !== 'new'"
 					:route="{
-						name: 'AssignmentSubmissionList',
-						query: { assignmentID: assignmentID },
+						name: 'AssignmentSubmissions',
+						query: { assignment: assignmentID },
 					}"
 					:label="__('Check Submissions')"
 					icon="lucide-clipboard-list"
@@ -345,6 +345,7 @@ const assignmentOptions = computed(() => {
 		{ label: 'PDF', value: 'PDF' },
 		{ label: 'Image', value: 'Image' },
 		{ label: 'Document', value: 'Document' },
+		{ label: 'Audio', value: 'Audio' },
 		{ label: 'Text', value: 'Text' },
 		{ label: 'URL', value: 'URL' },
 	]

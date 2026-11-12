@@ -12,19 +12,25 @@
 		v-model:page-length="pageLength"
 		empty-name="Programming Exercises"
 		empty-icon="lucide-code"
+		:empty-title="emptyState?.title"
+		:empty-description="emptyState?.description"
 		@load-more="exercises.next()"
 	>
+		<template v-if="emptyState" #empty-actions>
+			<EmptyStateActions
+				list="programming_exercises"
+				:create-label="__('New Programming Exercise')"
+				docs="https://docs.frappe.io/learning/assessments/programming-exercise"
+				@create="openExerciseForm('new')"
+			/>
+		</template>
+
 		<template #actions>
-			<Button
-				v-if="exercises.data?.length"
+			<HeaderButton
 				:route="{ name: 'ProgrammingExerciseSubmissions' }"
-				class="hidden md:inline-flex text-p-base-medium"
-			>
-				<template #prefix>
-					<span class="lucide-clipboard-list size-4" />
-				</template>
-				{{ __('Check All Submissions') }}
-			</Button>
+				:label="__('Submissions')"
+				icon="lucide-clipboard-list"
+			/>
 			<Button
 				v-if="!readOnlyMode"
 				variant="solid"
@@ -74,8 +80,6 @@
 			</Button>
 		</template>
 	</ListPage>
-
-	<router-view />
 </template>
 <script setup lang="ts">
 import {
@@ -98,12 +102,25 @@ import {
 	type FrappeResourceError,
 } from 'frappe-ui'
 import ListPage from '@/components/Layouts/ListPage.vue'
+import EmptyStateActions from '@/components/EmptyStateActions.vue'
+import HeaderButton from '@/components/HeaderButton.vue'
 import Select from '@/components/Controls/Select.vue'
 import type { ListRow } from '@/types'
 
 import { sessionStore } from '@/stores/session'
 import { useRouter } from 'vue-router'
-import { openFormRoute } from '@/composables/useFormRoute'
+
+// What lands in this list and how to start it, for the person who would fill it;
+// learners keep the default wording.
+const emptyState = computed(() => {
+	if (readOnlyMode) return null
+	return {
+		title: __('Create your first programming exercise'),
+		description: __(
+			'Learners write and run code in the browser, and test cases check their answers.'
+		),
+	}
+})
 
 const readOnlyMode = window.read_only_mode
 const { brand } = sessionStore()
@@ -140,13 +157,15 @@ const exercises = createListResource({
 	pageLength: 24,
 })
 
-// openFormRoute, not a bare router.push: it stamps the history entry so the
-// form knows it can pop rather than replace when it closes.
+// A plain push, not openFormRoute: the marker it stamps exists so a dialog's
+// own close can pop the entry it opened, and the form is a page now — it goes
+// back through its breadcrumbs.
 const openExerciseForm = (exerciseID: string) => {
-	openFormRoute(router, {
-		name: 'ProgrammingExerciseForm',
-		params: { exerciseID },
-	})
+	router.push(
+		exerciseID === 'new'
+			? { name: 'NewProgrammingExercise' }
+			: { name: 'ProgrammingExerciseForm', params: { exerciseID } }
+	)
 }
 
 const listOptions = computed(() => ({

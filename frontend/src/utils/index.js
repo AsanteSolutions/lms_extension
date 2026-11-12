@@ -1,4 +1,6 @@
 import { call, toast } from 'frappe-ui'
+import { AUDIO_EXTENSIONS } from '@/utils/audio'
+import { ASSESSMENT_BLOCK_SELECTOR } from '@/utils/blockMount'
 import { Quiz } from '@/utils/quiz'
 import { Program } from '@/utils/program'
 import { Assignment } from '@/utils/assignment'
@@ -6,7 +8,10 @@ import { Upload } from '@/utils/upload'
 import { Markdown } from '@/utils/markdownParser'
 import { useSettings } from '@/stores/settings'
 import { usersStore } from '@/stores/user'
+import router from '@/router'
+import { pushSettingsHash } from '@/composables/useSettingsHash'
 import { Heading } from '@/utils/heading'
+import { UnknownBlock } from '@/utils/unknownBlock'
 import Paragraph from '@editorjs/paragraph'
 import { CodeBox } from '@/utils/code'
 import NestedList from '@editorjs/nested-list'
@@ -20,8 +25,8 @@ import {
 	clipboardTuneNames,
 } from '@/utils/blockTunes/clipboardTunes'
 import dayjs from '@/utils/dayjs'
-import Embed from '@editorjs/embed'
-import SimpleImage from '@editorjs/simple-image'
+import { SafeEmbed } from '@/utils/safeEmbed'
+import LessonImage from '@/utils/lessonImage'
 import Table from '@editorjs/table'
 import DOMPurify from 'dompurify'
 import { decodeEntities } from './inertHtml'
@@ -181,7 +186,10 @@ export function getEditorTools(
 			class: Markdown,
 			inlineToolbar: INLINE_TOOLBAR_ORDER,
 		},
-		image: SimpleImage,
+		image: LessonImage,
+		stub: {
+			class: UnknownBlock,
+		},
 		paragraph: {
 			class: Paragraph,
 			inlineToolbar: INLINE_TOOLBAR_ORDER,
@@ -213,7 +221,7 @@ export function getEditorTools(
 		cutBlock: clipboardTunes.cutBlock,
 		pasteBlock: clipboardTunes.pasteBlock,
 		embed: {
-			class: Embed,
+			class: SafeEmbed,
 			inlineToolbar: false,
 			config: {
 				services: {
@@ -566,11 +574,6 @@ const getSidebarItems = (forMobile = false) => {
 					activeFor: ['Statistics'],
 				},
 				{
-					label: 'Student Portal',
-					icon: 'LucideUser',
-					to: 'student-portal',
-				},
-				{
 					label: 'Contact Us',
 					icon: settings.data?.contact_us_url ? 'Headset' : 'Mail',
 					to: settings.data?.contact_us_url
@@ -617,7 +620,7 @@ const getSidebarItems = (forMobile = false) => {
 					},
 					activeFor: [
 						'Assignments',
-						'AssignmentSubmissionList',
+						'AssignmentSubmissions',
 						'AssignmentSubmission',
 					],
 				},
@@ -727,6 +730,10 @@ export const validateFile = async (
 		)
 	} else if (fileType == 'zip' && extension != 'zip') {
 		return error(__('Only ZIP files are allowed.'))
+	} else if (fileType == 'audio' && !AUDIO_EXTENSIONS.includes(extension)) {
+		return error(
+			__('Upload an audio file: {0}.').format(AUDIO_EXTENSIONS.join(', '))
+		)
 	} else if (
 		['image', 'video'].includes(fileType) &&
 		!file.type.startsWith(`${fileType}/`)
@@ -860,7 +867,10 @@ export const createLMSCategory = (name) => {
 // arrived. Say so instead, and leave the form where it is.
 // Returns whether Settings actually opened, so a caller that closes itself
 // separately can stay put when it did not.
-export const openSettings = (category, close = null) => {
+// Takes the tab's slug, not its label, since renaming a label must not break
+// callers. Returns whether Settings actually opened, so a caller that closes
+// itself separately can stay put when it did not.
+export const openSettings = (slug, close = null, field = null) => {
 	const settingsStore = useSettings()
 	if (!settingsStore.isSettingsMounted) {
 		toast.error(__('Settings is only available on a larger screen.'))
@@ -869,8 +879,8 @@ export const openSettings = (category, close = null) => {
 	if (close) {
 		close()
 	}
-	settingsStore.activeTab = category
-	settingsStore.isSettingsOpen = true
+	settingsStore.focusField = field
+	pushSettingsHash(router, slug)
 	return true
 }
 
@@ -932,9 +942,13 @@ const getRootNode = (selector = '#editor') => {
 	return root
 }
 
+// A saved highlight belongs to the lesson's own text, so text inside an inline
+// quiz, assignment or exercise is never a match.
 const createTextWalker = (root, phrase) => {
 	return document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
 		acceptNode(node) {
+			if (node.parentElement?.closest(ASSESSMENT_BLOCK_SELECTOR))
+				return NodeFilter.FILTER_SKIP
 			return node.nodeValue.toLowerCase().includes(phrase.toLowerCase())
 				? NodeFilter.FILTER_ACCEPT
 				: NodeFilter.FILTER_SKIP

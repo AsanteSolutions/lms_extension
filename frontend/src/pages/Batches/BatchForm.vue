@@ -112,6 +112,7 @@
 								/>
 								<Link
 									doctype="Currency"
+									query="lms.lms.api.search_currencies"
 									v-model="batchDetail.doc.currency"
 									:filters="{ enabled: 1 }"
 									:label="__('Currency')"
@@ -236,7 +237,7 @@
 							variant="outline"
 							:onCreate="
 								(value, close) => {
-									openSettings('Zoom Accounts', close)
+									openSettings('zoom', close)
 								}
 							"
 						/>
@@ -248,7 +249,7 @@
 							variant="outline"
 							:onCreate="
 								(value, close) => {
-									openSettings('Google Meet Accounts', close)
+									openSettings('google-meet', close)
 								}
 							"
 						/>

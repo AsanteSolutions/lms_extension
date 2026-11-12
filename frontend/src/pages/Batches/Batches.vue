@@ -1,7 +1,7 @@
 <template>
 	<ListPage
 		:breadcrumbs="breadcrumbs"
-		:title="__('All Batches')"
+		:title="pageTitle"
 		:rows="batches.data || []"
 		:loading="batches.list.loading"
 		:total-count="batchCount"
@@ -9,7 +9,12 @@
 		v-model:page-length="pageLength"
 		empty-name="Batches"
 		empty-icon="lucide-users"
+		:empty-title="emptyState?.title"
+		:empty-description="emptyState?.description"
+		:search-query="title"
+		:filtered="Boolean(currentCategory || certification)"
 		@load-more="batches.next()"
+		@clear-filters="clearFilters"
 	>
 		<template #actions>
 			<div v-if="canCreateBatch()" class="flex items-center gap-2">
@@ -58,6 +63,16 @@
 			/>
 		</template>
 
+		<template v-if="emptyState" #empty-actions>
+			<EmptyStateActions
+				list="batches"
+				:tab="currentTab"
+				:create-label="__('New Batch')"
+				docs="https://docs.frappe.io/learning/create-a-batch"
+				@create="newBatchFromEmptyState"
+			/>
+		</template>
+
 		<template #card="{ row }">
 			<router-link
 				:to="{ name: 'BatchDetail', params: { batchName: row.name } }"
@@ -87,6 +102,7 @@ import BatchCard from '@/pages/Batches/components/BatchCard.vue'
 import ListPage from '@/components/Layouts/ListPage.vue'
 import { openFormRoute } from '@/composables/useFormRoute'
 import { setFormSource } from '@/composables/formTracking'
+import EmptyStateActions from '@/components/EmptyStateActions.vue'
 
 const user = inject('$user')
 const dayjs = inject('$dayjs')
@@ -98,7 +114,12 @@ const title = ref('')
 const certification = ref(false)
 const filters = ref({})
 const is_student = computed(() => user.data?.is_student)
-const currentTab = ref(is_student.value ? 'all' : 'upcoming')
+const isAdmin = computed(() =>
+	['is_moderator', 'is_instructor', 'is_evaluator'].some(
+		(role) => user.data?.[role]
+	)
+)
+const currentTab = ref('upcoming')
 const orderBy = ref('start_date')
 const readOnlyMode = window.read_only_mode
 const router = useRouter()
@@ -170,6 +191,14 @@ const batchCountResource = createResource({
 
 const batchCount = computed(() => batchCountResource.data ?? null)
 
+const clearFilters = () => {
+	currentCategory.value = null
+	certification.value = false
+	// The title watcher reloads on its own; reloading here as well fetches twice.
+	if (title.value) title.value = ''
+	else updateBatches()
+}
+
 const updateBatches = () => {
 	updateFilters()
 	batches.update({
@@ -226,6 +255,7 @@ const updateTabFilter = () => {
 	if (currentTab.value == 'enrolled' && is_student.value) {
 		filters.value['enrolled'] = 1
 		delete filters.value['start_date']
+		delete filters.value['end_date']
 		delete filters.value['published']
 		orderBy.value = 'start_date desc'
 	} else if (is_student.value) {
@@ -246,8 +276,12 @@ const updateTabFilter = () => {
 	}
 }
 
+// Learners and guests are shown only batches they can still join. A start_date
+// filter makes get_batches treat the list as upcoming, which also drops today's
+// batches whose start time has passed.
 const updateStudentFilter = () => {
-	if (!user.data || (is_student.value && currentTab.value != 'enrolled')) {
+	if (!isAdmin.value && currentTab.value != 'enrolled') {
+		delete filters.value['end_date']
 		filters.value['start_date'] = ['>=', dayjs().format('YYYY-MM-DD')]
 		filters.value['published'] = 1
 	}
@@ -294,25 +328,24 @@ watch(currentTab, () => {
 })
 
 const batchTabs = computed(() => {
-	let tabs = [
-		{
-			label: __('All'),
-			value: 'all',
-		},
-	]
-
-	if (
-		user.data?.is_moderator ||
-		user.data?.is_instructor ||
-		user.data?.is_evaluator
-	) {
-		tabs.push({ label: __('Upcoming'), value: 'upcoming' })
-		tabs.push({ label: __('Archived'), value: 'archived' })
-		tabs.push({ label: __('Unpublished'), value: 'unpublished' })
-	} else if (user.data) {
+	if (isAdmin.value) {
+		return [
+			{ label: __('All'), value: 'all' },
+			{ label: __('Upcoming'), value: 'upcoming' },
+			{ label: __('Archived'), value: 'archived' },
+			{ label: __('Unpublished'), value: 'unpublished' },
+		]
+	}
+	const tabs = [{ label: __('Upcoming'), value: 'upcoming' }]
+	if (user.data) {
 		tabs.push({ label: __('Enrolled'), value: 'enrolled' })
 	}
 	return tabs
+})
+
+const pageTitle = computed(() => {
+	const tab = batchTabs.value.find((t) => t.value === currentTab.value)
+	return __('{0} Batches').format(tab?.label)
 })
 
 const canCreateBatch = () => {
@@ -326,6 +359,50 @@ const openNewBatch = () => {
 	setFormSource('header_button')
 	openFormRoute(router, { name: 'NewBatch' })
 }
+// A new site's batch tabs are all empty, and the learner wording ("fresh
+// learning experiences are on the way") tells the person who would create
+// them nothing. Each tab says what lands there and how to start one.
+const emptyState = computed(() => {
+	if (!canCreateBatch()) return null
+	switch (currentTab.value) {
+		case 'active':
+			return {
+				title: __('Teach people together in a batch'),
+				description: __(
+					'Take a group through your courses on a schedule, with live classes and a certificate at the end.'
+				),
+			}
+		case 'upcoming':
+			return {
+				title: __('No upcoming batches'),
+				description: __(
+					'Published batches that start later show up here, so you can open sign-ups early.'
+				),
+			}
+		case 'archived':
+			return {
+				title: __('No archived batches'),
+				description: __(
+					'Batches move here once they start, so you can look back at each group.'
+				),
+			}
+		case 'unpublished':
+			return {
+				title: __('No unpublished batches'),
+				description: __(
+					'New batches wait here until you publish them, so learners never see a half-ready batch.'
+				),
+			}
+		default:
+			return null
+	}
+})
+
+function newBatchFromEmptyState() {
+	setFormSource('empty_state')
+	openFormRoute(router, { name: 'NewBatch' })
+}
+
 const openBatchImport = () =>
 	router.push({ name: 'NewDataImport', params: { doctype: 'LMS Batch' } })
 

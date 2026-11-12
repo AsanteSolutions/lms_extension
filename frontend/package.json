@@ -6,15 +6,16 @@
 	"scripts": {
 		"dev": "vite",
 		"serve": "vite preview",
-		"build": "vite build --base=/assets/lms_extension/frontend/ && yarn copy-html-entry && yarn build:signup-select",
+		"build": "vite build --base=/assets/lms/frontend/ && yarn copy-html-entry && yarn build:signup-select",
 		"build:signup-select": "vite build --config vite.signup-select.config.js",
-		"copy-html-entry": "cp ../lms_extension/public/frontend/index.html ../lms_extension/www/_lms.html",
+		"copy-html-entry": "cp ../lms/public/frontend/index.html ../lms/www/_lms.html",
 		"test": "vitest run",
 		"test:watch": "vitest"
 	},
 	"dependencies": {
 		"@codemirror/lang-html": "^6.4.9",
 		"@codemirror/lang-javascript": "^6.2.2",
+		"@codemirror/lang-python": "^6.1.6",
 		"@codemirror/state": "^6.0.0",
 		"@codemirror/view": "^6.0.0",
 		"@editorjs/editorjs": "2.29.0",
@@ -26,6 +27,7 @@
 		"@editorjs/simple-image": "1.6.0",
 		"@editorjs/table": "2.4.2",
 		"@framework/ui": "link:../../frappe/ui",
+		"@frappe/cloud-sdk": "0.6.0",
 		"@headlessui/vue": "1.7.23",
 		"@vueuse/core": "^14.1.0",
 		"dayjs": "1.11.10",

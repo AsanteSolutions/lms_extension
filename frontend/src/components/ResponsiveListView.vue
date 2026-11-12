@@ -75,16 +75,26 @@
 							</div>
 							<div
 								v-if="detailColumns.length"
-								class="mt-0.5 flex min-w-0 flex-wrap items-baseline gap-x-1.5 text-p-sm text-ink-gray-6"
+								class="mt-0.5 flex min-w-0 items-baseline gap-x-1.5 overflow-hidden text-p-sm text-ink-gray-6"
 							>
 								<template
 									v-for="(column, index) in detailColumns"
 									:key="column.key"
 								>
-									<span v-if="index && !noDetailSeparator" aria-hidden="true"
-										>·</span
+									<span
+										v-if="index && !noDetailSeparator"
+										aria-hidden="true"
+										class="shrink-0"
 									>
-									<span class="min-w-0 truncate [&>*]:truncate">
+										·
+									</span>
+									<span
+										:class="
+											index === 0
+												? 'min-w-0 truncate [&>*]:truncate'
+												: 'shrink-0 truncate [&>*]:truncate'
+										"
+									>
 										<span class="sr-only">{{ column.label }}: </span>
 										<slot
 											name="cell"
@@ -136,7 +146,7 @@
 		</template>
 	</ListView>
 
-	<div v-if="showCards && selectionEnabled" :class="CARD_DOCK_CLASS">
+	<div v-if="docksBanner && selectionEnabled" :class="CARD_DOCK_CLASS">
 		<span class="sr-only" role="status">{{ selectionAnnouncement }}</span>
 		<div
 			ref="bannerDock"
@@ -189,6 +199,12 @@ const props = withDefaults(
 		forceCards?: boolean
 		/** Drop the `·` between detail cells, for a list whose cells are already badges. */
 		noDetailSeparator?: boolean
+		/**
+		 * Put the selection banner under the rows at every width, as the cards do.
+		 * For a short table inside a form, where frappe-ui's floating banner
+		 * would sit on top of the very rows that were selected.
+		 */
+		dockedBanner?: boolean
 	}>(),
 	{
 		options: undefined,
@@ -196,6 +212,7 @@ const props = withDefaults(
 		pageScroll: false,
 		forceCards: false,
 		noDetailSeparator: false,
+		dockedBanner: false,
 	}
 )
 
@@ -292,8 +309,13 @@ const selectionEnabled = computed(
 		props.options?.selectable === true && Boolean(slots['selection-actions'])
 )
 
+// Cards always dock their banner below the rows; a docked table does too.
+const docksBanner = computed(() => showCards.value || props.dockedBanner)
+
 const bannerRendered = computed(() =>
-	showCards.value ? selectionEnabled.value : Boolean(slots['selection-actions'])
+	docksBanner.value
+		? selectionEnabled.value
+		: Boolean(slots['selection-actions'])
 )
 
 const bannerDock = ref<HTMLElement | null>(null)
@@ -306,13 +328,13 @@ onMounted(() => (mounted.value = true))
  * render — empty, since frappe-ui hides it while nothing is selected.
  */
 const bannerTarget = computed(() =>
-	showCards.value && mounted.value ? bannerDock.value : null
+	docksBanner.value && mounted.value ? bannerDock.value : null
 )
 
 // The banner is sized for a desk in frappe-ui; only the card layout's copy is
 // unpinned, so the class travels with the layout rather than the element.
 const bannerClass = computed(() =>
-	showCards.value ? CARD_BANNER_CLASS : undefined
+	docksBanner.value ? CARD_BANNER_CLASS : undefined
 )
 
 // Row checkbox. The attribute sits on the wrapper, but the input inside takes
